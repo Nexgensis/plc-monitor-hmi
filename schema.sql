@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS plc_profile (
     last_error TEXT DEFAULT NULL,          -- String describing the last error encountered
     consecutive_errors INTEGER DEFAULT 0,  -- Count of failed requests since last success
 
+    -- Message register configuration
+    message_register_id INTEGER            -- Register ID for status bar messages
+      REFERENCES register_library(id) ON DELETE SET NULL,
+
     updated_at TEXT DEFAULT (datetime('now','utc')) -- Timestamp of last config update
 );
 
@@ -180,7 +184,7 @@ CREATE TABLE IF NOT EXISTS test_results (
     session_id INTEGER NOT NULL            -- Link to the test session
       REFERENCES test_sessions(id) ON DELETE CASCADE,
     register_id INTEGER NOT NULL           -- The library register measured
-      REFERENCES register_library(id),
+      REFERENCES register_library(id) ON DELETE CASCADE,
     display_name TEXT NOT NULL,            -- Name snapshot at time of test
     group_name TEXT DEFAULT '',            -- Group snapshot at time of test
     measured_value REAL DEFAULT 0.0,       -- Processed value (scaled)
@@ -195,7 +199,7 @@ CREATE TABLE IF NOT EXISTS test_results (
 CREATE TABLE IF NOT EXISTS plc_write_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Unique log entry ID
     timestamp TEXT DEFAULT (datetime('now','utc')), -- Time of write
-    register_id INTEGER REFERENCES register_library(id), -- Target register (if from library)
+    register_id INTEGER REFERENCES register_library(id) ON DELETE CASCADE, -- Target register (if from library)
     register_address INTEGER NOT NULL,     -- Modbus address targeted
     register_name TEXT NOT NULL,           -- Name of the register at time of write
     value_written TEXT NOT NULL,           -- The value sent to the PLC

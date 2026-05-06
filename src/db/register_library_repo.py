@@ -191,10 +191,18 @@ class RegisterLibraryRepo:
     def delete_register(self, register_id: int) -> bool:
         """
         Deletes a register from the library.
-        Fails if the register is in use by any other table.
+        
+        Note: Historical audit data (plc_write_log, test_results) and
+        the message_register_id reference will cascade delete automatically.
+        
+        Fails if the register is currently in active use by models, 
+        controls, I/O list, or message mappings.
         """
         usage = self.check_register_in_use(register_id)
-        if usage["total"] > 0:
+        # Check only for active/configuration usage, not historical data
+        active_usage = usage["model_maps"] + usage["control_registers"] + usage["io_list"] + usage["message_register"]
+        
+        if active_usage > 0:
             details = []
             if usage["model_maps"] > 0: details.append(f"{usage['model_maps']} model mappings")
             if usage["control_registers"] > 0: details.append(f"{usage['control_registers']} control buttons")
@@ -210,7 +218,11 @@ class RegisterLibraryRepo:
 
     def check_register_in_use(self, register_id: int) -> dict:
         """
-        Checks references to this register across the entire database.
+        Checks active references to this register (config usage, not historical data).
+        
+        Note: Historical audit trails (plc_write_log, test_results) and 
+        message_register_id references will cascade delete and are not checked here.
+        We only check for active configuration usage that would prevent deletion.
         """
         row_maps = self.db.fetchone("SELECT COUNT(*) as cnt FROM model_register_map WHERE register_id = ?", (register_id,))
         maps = row_maps["cnt"] if row_maps else 0
@@ -221,7 +233,7 @@ class RegisterLibraryRepo:
         row_io = self.db.fetchone("SELECT COUNT(*) as cnt FROM io_list_config WHERE register_id = ?", (register_id,))
         io = row_io["cnt"] if row_io else 0
         
-        row_msg = self.db.fetchone("SELECT COUNT(*) as cnt FROM plc_profile WHERE message_register_id = ?", (register_id,))
+        row_msg = self.db.fetchone("SELECT COUNT(*) as cnt FROM message_register WHERE register_id = ?", (register_id,))
         msg = row_msg["cnt"] if row_msg else 0
 
         total = maps + ctrls + io + msg

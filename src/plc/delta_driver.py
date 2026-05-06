@@ -165,6 +165,7 @@ class DeltaDriver(MitsubishiDriver):
                         response_time_ms=ms,
                     )
                 else:
+                    self.logger.error("Modbus read error: %s", str(resp))
                     self._connected = False
                     return PLCReadResult(
                         success=False,

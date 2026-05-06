@@ -219,13 +219,11 @@ class PLCDriver(ABC):
         register_type: str,
     ) -> PLCReadResult:
         """
-        Read multiple PLC-native addresses in ONE Modbus request.
+        Read multiple PLC-native addresses using smart chunking.
 
-        Finds the min and max PLC address, reads the full contiguous block,
-        then extracts only the requested offsets. This minimises round trips
-        when polling many registers on each scan cycle.
-
-        Constraint: all addresses must share the same register_type.
+        Groups addresses into chunks to prevent exceeding Modbus limits
+        (max 64 registers per request for Delta/generic compatibility) and
+        avoids reading large gaps of invalid addresses.
 
         Args:
             addresses:     List of PLC-native addresses (D-numbers, M-numbers…).
@@ -238,27 +236,53 @@ class PLCDriver(ABC):
         if not addresses:
             return PLCReadResult(success=False, error="Empty address list")
 
-        min_addr = min(addresses)
-        max_addr = max(addresses)
-        span     = max_addr - min_addr + 1
+        # Sort and deduplicate addresses for chunking
+        sorted_addrs = sorted(list(set(addresses)))
+        chunks = []
+        current_chunk = [sorted_addrs[0]]
 
-        # Single bulk read of the contiguous block
-        bulk = self.read_registers(min_addr, register_type, span)
-        if not bulk.success:
-            return bulk
+        # Max span per chunk (64 is safe for Delta DVP)
+        MAX_CHUNK_SPAN = 64
+        # Max gap between registers to keep in same chunk
+        MAX_GAP = 10
 
-        # Extract only the values that were requested, preserving input order
-        extracted = [
-            bulk.values[addr - min_addr]
-            if (addr - min_addr) < len(bulk.values) else 0
-            for addr in addresses
-        ]
+        for addr in sorted_addrs[1:]:
+            span_if_added = addr - current_chunk[0] + 1
+            gap = addr - current_chunk[-1]
+
+            if gap > MAX_GAP or span_if_added > MAX_CHUNK_SPAN:
+                chunks.append(current_chunk)
+                current_chunk = [addr]
+            else:
+                current_chunk.append(addr)
+        chunks.append(current_chunk)
+
+        read_values_map = {}
+        total_ms = 0.0
+
+        for chunk in chunks:
+            min_addr = chunk[0]
+            max_addr = chunk[-1]
+            span = max_addr - min_addr + 1
+
+            bulk = self.read_registers(min_addr, register_type, span)
+            if not bulk.success:
+                return bulk
+
+            total_ms += bulk.response_time_ms
+            for i in range(span):
+                val = bulk.values[i] if i < len(bulk.values) else 0
+                read_values_map[min_addr + i] = val
+
+        # Extract only the requested values in the original order
+        extracted = [read_values_map.get(addr, 0) for addr in addresses]
+
         return PLCReadResult(
             success=True,
             values=extracted,
-            register_address=bulk.register_address,
+            register_address=sorted_addrs[0],
             count=len(addresses),
-            response_time_ms=bulk.response_time_ms,
+            response_time_ms=total_ms,
         )
 
     # ------------------------------------------------------------------
