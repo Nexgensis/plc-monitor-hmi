@@ -1,0 +1,385 @@
+QMainWindow, QWidget, QDialog {
+  background-color: #0a0e1a;
+  color: #e8f0fa;
+  font-family: "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+
+/* Force all labels to be transparent by default */
+QLabel {
+  background-color: transparent;
+}
+
+QFrame#sidebar {
+  background-color: #070b14;
+  border-right: 1px solid #1e2d4a;
+  min-width: 68px; max-width: 68px;
+}
+
+QFrame#top_bar {
+  background-color: #0f1824;
+  border-bottom: 1px solid #1a2438;
+  min-height: 48px; max-height: 48px;
+}
+
+QFrame#status_bar {
+  background-color: #070b14;
+  border-top: 1px solid #1a2438;
+  min-height: 28px; max-height: 28px;
+}
+
+QFrame#content_area {
+  background-color: #0a0e1a;
+}
+
+/* --- Typography --- */
+QLabel#page_title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5a7a9a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+QLabel#page_subtitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #e8f0fa;
+  margin-bottom: 10px;
+}
+
+QLabel#page_title_main {
+  font-size: 16px;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+QLabel#admin_only_label {
+  color: #5a7a9a;
+  font-style: italic;
+}
+
+/* --- Buttons --- */
+QPushButton {
+  background-color: #1e2d4a;
+  color: #a8c4e8;
+  border: 1px solid #2a3f5c;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 38px;
+}
+QPushButton:hover {
+  background-color: #243657; 
+  border-color: #3a5a7a;
+}
+QPushButton:pressed {
+  background-color: #162238;
+}
+QPushButton:disabled {
+  background-color: #0f1824; 
+  color: #3a5a6a;
+}
+
+QPushButton#btn_danger {
+  background-color: #7a1a1a; color: #ffaaaa;
+  border: 1px solid #9a2a2a;
+}
+QPushButton#btn_danger:hover {
+  background-color: #8a2a2a;
+}
+
+QPushButton#btn_success {
+  background-color: #1a3a20; color: #6dba8a;
+  border: 1px solid #2a5a30;
+}
+QPushButton#btn_success:hover {
+  background-color: #1f4a28;
+}
+
+QPushButton#btn_warning {
+  background-color: #3a2a00; color: #d4a830;
+  border: 1px solid #5a4a10;
+}
+
+QPushButton#nav_btn {
+  background-color: transparent; border: none;
+  border-radius: 10px; color: #5a7a9a;
+  min-width: 52px; max-width: 52px;
+  min-height: 52px; max-height: 52px;
+}
+QPushButton#nav_btn:hover {
+  background-color: #12182a; color: #8aaaca;
+}
+QPushButton#nav_btn[active="true"] {
+  background-color: #1e2d4a; color: #a8c4e8;
+}
+
+QPushButton#model_btn {
+  background-color: #0f1824;
+  color: #a8c4e8;
+  border: 2px solid #1e2d4a;
+  border-radius: 12px;
+  font-size: 18px; font-weight: 600;
+  min-height: 100px;
+}
+QPushButton#model_btn:hover {
+  background-color: #1e2d4a; border-color: #3a5a7a;
+}
+QPushButton#model_btn:checked {
+  background-color: #162238;
+  border: 2px solid #3b82f6;
+}
+
+/* --- Inputs --- */
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {
+  background-color: #0f1824;
+  color: #c8d8f0;
+  border: 1px solid #1e2d4a;
+  border-radius: 6px;
+  padding: 6px 12px;
+  min-height: 36px;
+}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {
+  border-color: #3b82f6;
+}
+
+QFormLayout QLabel {
+  font-weight: 500;
+  color: #7aabdb;
+  min-width: 120px;
+}
+
+/* --- Tables --- */
+QTableWidget {
+  background-color: #0a0e1a;
+  alternate-background-color: #0d1220;
+  color: #c8d8f0;
+  gridline-color: #1a2438;
+  selection-background-color: #1e2d4a;
+  selection-color: #e8f0fa;
+  border: 1px solid #1a2438;
+}
+
+QHeaderView::section {
+  background-color: #0f1824;
+  color: #7aabdb;
+  border: 0.5px solid #1a2438;
+  padding: 10px;
+  font-weight: 600;
+}
+
+/* --- Containers --- */
+QGroupBox {
+  color: #7aabdb; border: 1px solid #1e2d4a;
+  border-radius: 8px; margin-top: 12px;
+  padding-top: 20px;
+}
+QGroupBox::title {
+  subcontrol-origin: margin;
+  left: 12px;
+  padding: 0 5px;
+}
+
+QFrame#status_card {
+  background-color: #0f1824;
+  border: 1px solid #1e2d4a;
+  border-radius: 12px;
+}
+
+/* ParamCard Styling */
+QFrame#module_card {
+  background-color: #0f1824;
+  border: 1px solid #1e2d4a;
+  border-radius: 12px;
+}
+QFrame#module_card[result="pass"] {
+  border-color: #1a6b3a;
+  background-color: #064e3b;
+}
+QFrame#module_card[result="fail"] {
+  border-color: #c0392b;
+  background-color: #450a0a;
+}
+QFrame#module_card[result="running"] {
+  border-color: #3b82f6;
+}
+
+QLabel#card_group_label {
+  font-size: 9px;
+  font-weight: 800;
+  color: #5a7a9a;
+  text-transform: uppercase;
+}
+
+QLabel#card_drag_handle {
+  color: #2a3f5c;
+  font-size: 14px;
+}
+
+QLabel#card_name_label {
+  font-weight: 600;
+  color: #e8f0fa;
+}
+QFrame#module_card[size_mode="large"] QLabel#card_name_label { font-size: 14px; }
+QFrame#module_card[size_mode="medium"] QLabel#card_name_label { font-size: 13px; }
+QFrame#module_card[size_mode="small"] QLabel#card_name_label { font-size: 11px; }
+
+QLabel#card_value_label {
+  font-weight: 700;
+  font-family: "Consolas", "Monaco", monospace;
+  color: #ffffff;
+}
+QFrame#module_card[size_mode="large"] QLabel#card_value_label { font-size: 28px; }
+QFrame#module_card[size_mode="medium"] QLabel#card_value_label { font-size: 22px; }
+QFrame#module_card[size_mode="small"] QLabel#card_value_label { font-size: 18px; }
+
+QLabel#card_unit_label {
+  color: #5a7a9a;
+  font-weight: 500;
+}
+QFrame#module_card[size_mode="large"] QLabel#card_unit_label { font-size: 12px; }
+QFrame#module_card[size_mode="medium"] QLabel#card_unit_label { font-size: 10px; }
+QFrame#module_card[size_mode="small"] QLabel#card_unit_label { font-size: 9px; }
+
+QFrame#warning_banner {
+  background-color: #451a03;
+  border: 1px solid #92400e;
+  border-radius: 8px;
+}
+QFrame#warning_banner QLabel {
+  color: #fdba74;
+}
+
+QLabel#plc_status_text {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+QLabel#connection_status_label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+QLabel#success_message {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+QLabel#connection_test_title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #22c55e;
+}
+
+/* --- Test Page Components --- */
+QFrame#model_banner {
+  border-radius: 8px;
+  border: 1px solid #1e2d4a;
+}
+QFrame#model_banner[connected="true"] {
+  background-color: #064e3b;
+}
+QFrame#model_banner[connected="false"] {
+  background-color: #7f1d1d;
+}
+
+QLabel#model_banner_text {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+QLabel#empty_dashboard_label {
+  font-size: 14px;
+  color: #5a7a9a;
+}
+
+QFrame#overall_result_card, QFrame#cycle_time_card {
+  background-color: #0f1824;
+  border: 1px solid #1e2d4a;
+  border-radius: 10px;
+}
+
+QLabel#small_header_label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #5a7a9a;
+  text-transform: uppercase;
+}
+
+QLabel#cycle_time_value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #3b82f6;
+  font-family: "Consolas", "Monaco", monospace;
+}
+
+/* Overall Status Labels */
+QLabel#result_pending {
+  font-size: 20px;
+  font-weight: 800;
+  color: #5a7a9a;
+}
+QLabel#result_running {
+  font-size: 20px;
+  font-weight: 800;
+  color: #3b82f6;
+}
+QLabel#result_pass {
+  font-size: 20px;
+  font-weight: 800;
+  color: #22c55e;
+}
+QLabel#result_fail {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ef4444;
+}
+
+/* Counters */
+QFrame#counter_card {
+  background-color: #0f1724;
+  border: 1px solid #1e2d4a;
+  border-radius: 8px;
+  padding: 6px;
+}
+
+QLabel[type="counter_value"] {
+  font-size: 22px;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+QLabel#counter_name_label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #5a7a9a;
+  text-transform: uppercase;
+}
+
+/* --- Tabs --- */
+QTabWidget::pane {
+  border: 1px solid #1e2d4a; border-radius: 8px;
+  background-color: #0a0e1a;
+}
+
+QTabBar::tab {
+  background-color: #0f1824; color: #5a7a9a;
+  padding: 8px 20px; border-radius: 4px 4px 0 0;
+  margin-right: 2px;
+}
+QTabBar::tab:selected {
+  background-color: #1e2d4a; color: #a8c4e8; font-weight: 600;
+}
+
+/* --- Progress Bar --- */
+QProgressBar {
+  background-color: #0f1824; border: 1px solid #1e2d4a;
+  border-radius: 10px; height: 8px; text-align: center;
+}
+QProgressBar::chunk {
+  background-color: #3b82f6; border-radius: 10px;
+}
+
