@@ -219,17 +219,16 @@ class TestModelPage:
         first_btn.click()
         state.connection_manager.update_poll_list.assert_called()
 
-    def test_push_not_started_when_disconnected(self, qtbot, state):
+    def test_model_selection_completes_when_disconnected(self, qtbot, state):
         state.is_plc_connected = False
         window = MainWindow(state)
         qtbot.addWidget(window)
         self._login(window, state)
-        
-        with patch("src.plc.model_push_worker.ModelPushWorker") as mock_worker:
-            first_btn = self._first_card(window)
-            first_btn.click()
-            mock_worker.assert_not_called()
-        # Local sync still completes regardless of connection state
+
+        first_btn = self._first_card(window)
+        first_btn.click()
+        # Push-to-PLC worker retired (cleanup D9): model selection still
+        # completes local sync regardless of connection state.
         assert state.current_model is not None
 
     def test_start_test_btn_disabled_initially(self, window, state):
