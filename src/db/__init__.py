@@ -10,7 +10,6 @@ from .control_repo import ControlRegisterRepo
 from .io_list_repo import IOListRepo
 from .block_repo import BlockRepo
 from .message_repo import MessageRegisterRepo
-from .seed import seed_database
 
 __all__ = [
     "Database",
@@ -25,5 +24,4 @@ __all__ = [
     "IOListRepo",
     "BlockRepo",
     "MessageRegisterRepo",
-    "seed_database",
 ]
