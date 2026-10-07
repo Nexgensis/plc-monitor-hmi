@@ -1747,14 +1747,6 @@ class ConfigPage(QWidget):
         self.imp_btn.clicked.connect(self._on_import)
         il.addWidget(self.imp_btn)
         layout.addWidget(imp_grp)
-        
-        # Templates
-        tmp_grp = QGroupBox("Quick Setup Templates")
-        tl = QHBoxLayout(tmp_grp)
-        tl.addWidget(QPushButton("Mitsubishi FX5U — Standard", clicked=lambda: self._load_template("fx5u")))
-        tl.addWidget(QPushButton("Delta DVP-ES2 — Standard", clicked=lambda: self._load_template("dvp")))
-        tl.addStretch()
-        layout.addWidget(tmp_grp)
 
         layout.addStretch()
         self.tabs.addTab(page, "⬆ Export / Import")
@@ -1937,7 +1929,3 @@ class ConfigPage(QWidget):
             imported.append("PLC Profile")
 
         return imported
-
-    def _load_template(self, plc_type: str) -> None:
-        # Simplified template loader
-        QMessageBox.information(self, "Template", f"Loading template for {plc_type}... (Simulation)")
