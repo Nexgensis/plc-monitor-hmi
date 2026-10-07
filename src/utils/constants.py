@@ -411,10 +411,3 @@ DEFAULT_START_COIL               = 100  # M100 — test start trigger coil
 DEFAULT_OVERALL_RESULT_REGISTER  = 22   # D22 — overall PASS/FAIL result
 DEFAULT_OK_COUNT_REGISTER        = 23   # D23 — OK (pass) counter
 DEFAULT_NG_COUNT_REGISTER        = 24   # D24 — NG (fail) counter
-
-# ---------------------------------------------------------------------------
-# UI Color Constants (used by ManualGrid and other components)
-# ---------------------------------------------------------------------------
-COLOR_NAVY  = "#1e2d4a"   # Dark navy for headers and button backgrounds
-COLOR_WHITE = "#e8f0fa"   # Off-white text on dark backgrounds
-COLOR_AMBER = "#f59e0b"   # Amber for flash/active indicators

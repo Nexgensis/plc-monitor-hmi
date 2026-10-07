@@ -4,7 +4,6 @@ All pure functions. No Qt imports. No side effects.
 Handles input validation and Modbus address conversion.
 Schema v4.0 — all addresses computed from user-supplied integers.
 """
-import re
 import struct
 import socket
 import logging
@@ -63,89 +62,6 @@ def validate_register_address(addr: Union[int, str]) -> bool:
         return 0 <= a <= 65535
     except (ValueError, TypeError):
         return False
-
-
-def validate_register_name(name: str) -> tuple[bool, str]:
-    """
-    Validates a register library name.
-    Rules:
-      - Must not be empty or whitespace-only.
-      - Maximum 100 characters.
-    Uniqueness check is deferred to the repository layer (DB UNIQUE constraint).
-
-    Returns:
-        (True, "") on success.
-        (False, reason) on failure.
-    """
-    if not isinstance(name, str) or not name.strip():
-        return False, "Name cannot be empty"
-    if len(name.strip()) > 100:
-        return False, "Name exceeds 100 characters"
-    return True, ""
-
-
-def validate_model_name(name: str) -> tuple[bool, str]:
-    """
-    Validates a model name.
-    Rules:
-      - Must not be empty.
-      - Maximum 50 characters.
-      - Only alphanumeric, hyphen, underscore, and space characters.
-    """
-    if not isinstance(name, str) or not name.strip():
-        return False, "Model name cannot be empty"
-    if len(name.strip()) > 50:
-        return False, "Model name exceeds 50 characters"
-    if not re.match(r'^[a-zA-Z0-9\-_ ]+$', name.strip()):
-        return False, "Invalid characters — use letters, digits, hyphen, underscore, or space"
-    return True, ""
-
-
-def validate_scale_factor(sf: Union[float, str]) -> bool:
-    """
-    Returns True if *sf* is a non-zero float within the safe display range.
-    Range: [0.00001, 100000.0] (absolute value).
-    Prevents divide-by-zero and absurdly large multipliers.
-    """
-    try:
-        val = float(sf)
-        return 0.00001 <= abs(val) <= 100000.0
-    except (ValueError, TypeError):
-        return False
-
-
-def validate_decimal_places(dp: Union[int, str]) -> bool:
-    """
-    Returns True if *dp* is an integer in [0, 6].
-    Controls the number of digits shown after the decimal point in the UI.
-    """
-    try:
-        d = int(dp)
-        return 0 <= d <= 6
-    except (ValueError, TypeError):
-        return False
-
-
-def validate_limit_range(min_val: Union[float, str],
-                          max_val: Union[float, str]) -> tuple[bool, str]:
-    """
-    Validates that *min_val* < *max_val* and the range is non-trivial.
-
-    Returns:
-        (True, "") on success.
-        (False, reason) on failure.
-    """
-    try:
-        mi = float(min_val)
-        ma = float(max_val)
-    except (ValueError, TypeError):
-        return False, "Invalid numeric input"
-
-    if ma <= mi:
-        return False, "Max value must be greater than Min"
-    if (ma - mi) < 1e-9:
-        return False, "Range is too small"
-    return True, ""
 
 
 # ---------------------------------------------------------------------------
@@ -335,22 +251,6 @@ def get_register_count(data_type: str) -> int:
 # ---------------------------------------------------------------------------
 # Export / display utilities
 # ---------------------------------------------------------------------------
-
-def sanitize_cell(value: object) -> str:
-    """
-    Converts *value* to a clean UTF-8 string safe for Excel / PDF export.
-    Strips null bytes and replaces un-encodable characters.
-    """
-    if value is None:
-        return ""
-    return (
-        str(value)
-        .replace("\x00", "")
-        .encode("utf-8", "replace")
-        .decode("utf-8")
-        .strip()
-    )
-
 
 def format_value(value: float, decimal_places: int, unit: str = "") -> str:
     """

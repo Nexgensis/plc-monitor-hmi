@@ -1,5 +1,8 @@
 # PLC Monitor — Project Description & QA Report
 
+> **HISTORICAL DOCUMENT** — snapshot from 2026-07-21; architecture/directory claims have since changed.
+> Current development status lives in `STATUS.md`.
+
 > **Version:** 1.0.0
 > **Stack:** Python 3.10+, PyQt6, pymodbus, SQLite, bcrypt, openpyxl, reportlab
 > **Last Updated:** 2026-07-21

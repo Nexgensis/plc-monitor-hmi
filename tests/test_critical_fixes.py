@@ -203,7 +203,7 @@ def window(qtbot, tmp_path):
     seed_database(db)
 
     # AppState is a session-wide singleton: snapshot the fields we overwrite
-    # so later files (test_login_ui etc.) do not inherit our real Database.
+    # so later test files do not inherit our real Database.
     s = AppState.get_instance()
     saved = {n: getattr(s, n) for n in _STATE_FIELDS if hasattr(s, n)}
 

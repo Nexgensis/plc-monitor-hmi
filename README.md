@@ -22,7 +22,6 @@ A desktop application for monitoring and interacting with Programmable Logic Con
 - Config wizard for first-run setup
 - Mock PLC server for development and testing
 - Animated spinner for loading states
-- Skeleton loaders for placeholder content during data loading
 - Toast notification system (non-blocking, auto-dismiss)
 - Property-based QSS theming (no hardcoded inline colors)
 - Font size adjustment (Small/Medium/Large)
@@ -73,40 +72,15 @@ playwright install
 
 ## Configuration
 
-The application uses a `config.json` file located in the root directory for configuration. 
+All configuration is stored in the SQLite database (`plc_monitor.db`) — the former `config.json` file has been removed:
 
-### Default Configuration (`config.json`)
+- **PLC connection profile** (brand, protocol, host/port or serial settings, polling) — CONFIG → PLC Connection tab (admin only)
+- **App settings** (theme, font size, max dashboard cards) — SETTINGS page
+- **Register library, models, mappings, I/O list, controls, message registers** — CONFIG page tabs
+- **JSON backup/restore** — CONFIG → Export / Import tab
 
-```json
-{
-  "app": {
-    "name": "PLC Monitor",
-    "version": "1.0.0",
-    "theme": "dark"
-  },
-  "plc": {
-    "brand": "mitsubishi",
-    "protocol": "TCP",
-    "host": "",
-    "port": 502,
-    "slave_id": 1,
-    "poll_interval_ms": 1,
-    "timeout_sec": 3,
-    "reconnect_delay_ms": 3000,
-    "com_port": "",
-    "baud_rate": 9600
-  }
-}
-```
+### PLC Settings
 
-### Configuration Options
-
-#### App Settings
-- `name`: Application name (displayed in the title bar)
-- `version`: Application version
-- `theme`: Initial theme (`dark` or `light`)
-
-#### PLC Settings
 - `brand`: PLC brand (`mitsubishi`, `delta`, etc.)
 - `protocol`: Communication protocol (`TCP` for Modbus TCP, `RTU` for Modbus RTU)
 - `host`: IP address of the PLC (for TCP protocol)
@@ -120,7 +94,7 @@ The application uses a `config.json` file located in the root directory for conf
 
 ### Environment Variables
 
-Currently, the application does not rely on environment variables for core configuration. All settings are managed through `config.json`. However, you may set environment variables for specific deployment scenarios if needed in the future.
+Currently, the application does not rely on environment variables for core configuration. All settings are managed through the database. However, you may set environment variables for specific deployment scenarios if needed in the future.
 
 ## Usage
 
@@ -183,7 +157,6 @@ See `docs/mock_plc_server.md` for full documentation on register maps, simulatio
 ```
 plc_monitor/
 │
-├── config.json             # Application configuration
 ├── main.py                 # Entry point of the application
 ├── requirements.txt        # Python dependencies
 ├── schema.sql              # Database schema
@@ -202,12 +175,10 @@ plc_monitor/
 │   ├── db/                 # Database access layer
 │   ├── logic/              # Business logic (pass/fail, sessions)
 │   ├── plc/                # PLC communication drivers
-│   ├── reports/            # Report generation modules
 │   ├── ui/                 # User interface components
 │   │   ├── components/     # Reusable UI widgets
 │   │   │   ├── toast.py        # Toast notification system
 │   │   │   ├── spinner.py      # Animated spinner widget
-│   │   │   ├── skeleton.py     # Skeleton loader widgets
 │   │   │   ├── sidebar.py      # Navigation sidebar
 │   │   │   ├── top_bar.py      # Application top bar
 │   │   │   ├── breadcrumb.py   # Breadcrumb navigation
@@ -215,14 +186,13 @@ plc_monitor/
 │   │   │   ├── param_card.py   # Dashboard parameter cards
 │   │   │   └── ...             # Other components
 │   │   ├── dialogs/        # Modal dialogs
-│   │   ├── pages/          # Page-level UI modules
-│   │   └── styles/         # Theme management
-│   └── utils/              # Utility functions
+│   │   └── pages/          # Page-level UI modules
+│   ├── utils/              # Utility functions (exporters, icons, validation)
 │
 ├── tests/                  # Test suite
 │
 ├── logs/                   # Log files (generated at runtime)
-├── reports/output/         # Generated reports (Excel, PDF)
+├── reports_output/         # Generated reports (Excel, PDF)
 └── scratch/                # Temporary scripts for debugging
 ```
 
@@ -271,7 +241,7 @@ Reports can be generated from the application interface:
 3. Configure the date range and parameters.
 4. Generate and save the report.
 
-Generated reports are saved in the `reports/output/` directory.
+Generated reports are saved in the `reports_output/` directory.
 
 ## Logging
 

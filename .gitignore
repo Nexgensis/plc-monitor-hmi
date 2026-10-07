@@ -35,6 +35,7 @@ logs/
 
 # Generated reports and exports
 reports/output/
+reports_output/
 exports/
 *.xlsx
 *.xls

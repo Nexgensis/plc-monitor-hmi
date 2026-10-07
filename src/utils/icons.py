@@ -84,8 +84,3 @@ def get_icon(name: str, color: str) -> str:
           f'viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="1.7" ' \
           f'stroke-linecap="round" stroke-linejoin="round">{body}</svg>'
     return svg
-
-
-def get_stroke_body(name: str) -> str:
-    """Return just the path bodies (without svg wrapper) for embedding."""
-    return _ICONS.get(name, "")

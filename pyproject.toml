@@ -2,4 +2,4 @@
 executionEnvironments = [
   { root = "." }
 ]
-extraPaths = ["src"]
+extraPaths = [".", "src"]

@@ -692,9 +692,6 @@ class ConfigPage(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
 
-    def _on_lib_save(self) -> None:
-        pass  # Now handled in dialog
-
     def _on_lib_delete(self) -> None:
         rows = self.lib_table.selectedItems()
         if not rows: return
@@ -1128,10 +1125,6 @@ class ConfigPage(QWidget):
         self.io_table.itemDoubleClicked.connect(self._on_io_edit)
         layout.addWidget(self.io_table)
 
-        # Edit Form - REMOVED, using dialog instead
-        # self.io_form_grp = QGroupBox("I/O Row Details") - REMOVED
-        # ... form code removed ...
-        
         banner = QLabel("Note: Changes take effect immediately. I/O List page auto-refreshes when visible.")
         banner.setObjectName("config_info_lbl")
         layout.addWidget(banner)
@@ -1203,9 +1196,6 @@ class ConfigPage(QWidget):
                 "label": f"{r['name']} (D{r['register_address']}, {r['register_type']})"
             })
         return options
-
-    def _on_io_save(self) -> None:
-        pass  # Now handled in dialog
 
     def _on_io_delete(self) -> None:
         rows = self.io_table.selectedItems()
@@ -1418,10 +1408,6 @@ class ConfigPage(QWidget):
         self.ctrl_table.itemSelectionChanged.connect(self._on_ctrl_selection_changed)
         layout.addWidget(self.ctrl_table)
 
-        # Form - REMOVED, using dialog instead
-        # self.ctrl_form_grp = QGroupBox("Control Button Details") - REMOVED
-        # ... form code removed ...
-        
         # Write Log
         layout.addWidget(QLabel("Recent Write Log (Audit Trail):"))
         self.ctrl_log_list = QListWidget()
@@ -1516,9 +1502,6 @@ class ConfigPage(QWidget):
                 "label": f"{r['name']} (D{r['register_address']}, {r['access']})"
             })
         return options
-
-    def _on_ctrl_save(self) -> None:
-        pass  # Now handled in dialog
 
     def _on_ctrl_delete(self) -> None:
         rows = self.ctrl_table.selectedItems()
@@ -1617,10 +1600,6 @@ class ConfigPage(QWidget):
         self.msg_table.itemDoubleClicked.connect(self._on_msg_edit)
         map_layout.addWidget(self.msg_table)
 
-        # Form - REMOVED, using dialog instead
-        # self.msg_form_grp = QGroupBox("Mapping Details") - REMOVED
-        # ... form code removed ...
-        
         right_col.addWidget(map_grp)
         main_layout.addLayout(right_col, 2)
 
@@ -1713,12 +1692,6 @@ class ConfigPage(QWidget):
                     self._refresh_message_tab()
                 except Exception as e:
                     QMessageBox.critical(self, "Error", str(e))
-
-    def _on_msg_save(self) -> None:
-        pass  # Now handled in dialog
-
-    def _on_msg_delete(self) -> None:
-        pass  # Now handled in dialog
 
     def _on_msg_clear_all(self) -> None:
         profile = self.app_state.profile_repo.get_profile()
