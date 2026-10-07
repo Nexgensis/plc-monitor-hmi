@@ -6,7 +6,6 @@ Verifies connectivity, basic read, and test write capability.
 from __future__ import annotations
 
 import logging
-import time
 from PyQt6.QtCore import QThread, pyqtSignal
 from .driver_factory import PLCDriverFactory
 
@@ -36,7 +35,8 @@ class ConnectionTester(QThread):
         driver = None
         try:
             self.test_progress.emit("Creating PLC driver instance...")
-            driver = PLCDriverFactory.create(self._profile)
+            # cached=False: never share (or disconnect) the live polling driver
+            driver = PLCDriverFactory.create(self._profile, cached=False)
 
             self.test_progress.emit(f"Connecting to {driver.brand} via {self._profile['protocol']}...")
             if not driver.connect():
@@ -72,7 +72,9 @@ class ConnectionTester(QThread):
                 "read_ok":     read_ok,
                 "write_ok":    write_ok,
                 "quality":     stats,
-                "message":     "Connection established successfully." if read_ok else "Connected, but address 0 rejected by PLC."
+                "message":     (
+                    "Connection established successfully." if read_ok else "Connected, but address 0 rejected by PLC."
+                )
             })
 
         except ValueError as e:
@@ -85,5 +87,5 @@ class ConnectionTester(QThread):
             if driver:
                 try:
                     driver.disconnect()
-                except:
+                except Exception:
                     pass

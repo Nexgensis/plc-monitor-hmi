@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 from .database import Database
 
@@ -55,3 +54,35 @@ class AppConfigRepo:
     def set_theme(self, theme: str) -> None:
         """Saves the preferred UI theme."""
         self.set_value("theme", theme)
+
+    def get_max_dashboard_cards(self) -> int:
+        """Retrieves the maximum number of dashboard cards allowed."""
+        val = self.get_value("max_dashboard_cards", "20")
+        try:
+            return max(1, min(30, int(val)))
+        except (ValueError, TypeError):
+            return 20
+
+    def set_max_dashboard_cards(self, count: int) -> None:
+        """Sets the maximum number of dashboard cards (clamped 1-30)."""
+        self.set_value("max_dashboard_cards", str(max(1, min(30, count))))
+
+    def get_font_size(self) -> int:
+        """Retrieves the font size setting."""
+        val = self.get_value("font_size", "13")
+        try:
+            return max(9, min(20, int(val)))
+        except (ValueError, TypeError):
+            return 13
+
+    def set_font_size(self, size: int) -> None:
+        """Saves the font size setting (clamped 9-20)."""
+        self.set_value("font_size", str(max(9, min(20, size))))
+
+    def get_high_contrast(self) -> bool:
+        """Retrieves the high contrast mode setting."""
+        return self.get_value("high_contrast", "0") == "1"
+
+    def set_high_contrast(self, enabled: bool) -> None:
+        """Saves the high contrast mode setting."""
+        self.set_value("high_contrast", "1" if enabled else "0")

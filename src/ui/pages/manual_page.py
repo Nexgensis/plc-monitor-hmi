@@ -6,19 +6,16 @@ monitoring live register values.
 from __future__ import annotations
 
 import logging
-from typing import Dict, Any, Optional
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QFrame, QTableWidget, QTableWidgetItem,
                              QHeaderView, QComboBox, QScrollArea)
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import QTimer
 
 from src.ui.app_state import AppState
 from src.ui.dialogs.confirm_dialog import ConfirmDialog
-from src.plc.data_model import RegisterReading
 from src.utils.constants import (
-    CTRL_START_TEST, CTRL_STOP_TEST, CTRL_BYPASS_FLAG, CTRL_CUSTOM,
-    REG_TYPE_HOLDING, REG_TYPE_COIL
+    CTRL_START_TEST, CTRL_STOP_TEST
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +29,7 @@ class ManualPage(QWidget):
 
     def __init__(self, app_state: AppState) -> None:
         super().__init__()
+        self.setAccessibleName("Manual control page")
         self.app_state = app_state
         self._live_timer = QTimer(self)
         self._live_timer.timeout.connect(self._refresh_live_table)
@@ -47,11 +45,11 @@ class ManualPage(QWidget):
         header = QHBoxLayout()
         title_v = QVBoxLayout()
         title = QLabel("MANUAL OPERATION")
-        title.setStyleSheet("font-size: 16px; font-weight: bold; color: #e8f0fa;")
+        title.setObjectName("manual_page_title")
         title_v.addWidget(title)
         
         self.plc_status_lbl = QLabel("PLC: Disconnected")
-        self.plc_status_lbl.setStyleSheet("font-size: 11px; color: #5a7a9a;")
+        self.plc_status_lbl.setObjectName("manual_plc_status")
         title_v.addWidget(self.plc_status_lbl)
         header.addLayout(title_v)
         
@@ -59,6 +57,8 @@ class ManualPage(QWidget):
         
         btn_refresh = QPushButton("🔄 Force Refresh")
         btn_refresh.setObjectName("btn_secondary")
+        btn_refresh.setAccessibleName("Force refresh")
+        btn_refresh.setToolTip("Force refresh of register values from PLC")
         btn_refresh.clicked.connect(self._refresh_live_table)
         header.addWidget(btn_refresh)
         layout.addLayout(header)
@@ -71,18 +71,18 @@ class ManualPage(QWidget):
         # LEFT: Control Panel
         ctrl_frame = QFrame()
         ctrl_frame.setFixedWidth(300)
-        ctrl_frame.setStyleSheet("background: #0f1724; border-radius: 8px; border: 1px solid #1e2d4a;")
+        ctrl_frame.setObjectName("manual_ctrl_frame")
         ctrl_layout = QVBoxLayout(ctrl_frame)
         
         lbl_ctrl = QLabel("CONTROL COMMANDS")
-        lbl_ctrl.setStyleSheet("font-size: 12px; font-weight: bold; color: #3b82f6; margin-bottom: 5px;")
+        lbl_ctrl.setObjectName("manual_ctrl_label")
         ctrl_layout.addWidget(lbl_ctrl)
 
         # Scroll area for many buttons
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
-        scroll.setStyleSheet("background: transparent;")
+        scroll.setObjectName("manual_scroll")
         self.btn_container = QWidget()
         self.btn_vbox = QVBoxLayout(self.btn_container)
         self.btn_vbox.setContentsMargins(0, 0, 0, 0)
@@ -92,7 +92,7 @@ class ManualPage(QWidget):
         
         ctrl_layout.addStretch()
         lbl_audit = QLabel("⚠ All manual writes are logged to audit trail.")
-        lbl_audit.setStyleSheet("font-size: 10px; color: #f59e0b; font-style: italic;")
+        lbl_audit.setObjectName("manual_audit_label")
         lbl_audit.setWordWrap(True)
         ctrl_layout.addWidget(lbl_audit)
         
@@ -100,24 +100,28 @@ class ManualPage(QWidget):
 
         # RIGHT: Live Value Table
         live_frame = QFrame()
-        live_frame.setStyleSheet("background: #0f1724; border-radius: 8px; border: 1px solid #1e2d4a;")
+        live_frame.setObjectName("manual_live_frame")
         live_layout = QVBoxLayout(live_frame)
         
         live_header = QHBoxLayout()
         lbl_live = QLabel("LIVE REGISTER MONITOR")
-        lbl_live.setStyleSheet("font-size: 12px; font-weight: bold; color: #3b82f6;")
+        lbl_live.setObjectName("manual_live_label")
         live_header.addWidget(lbl_live)
         
         live_header.addStretch()
         
         self.model_filter = QComboBox()
         self.model_filter.setFixedWidth(180)
+        self.model_filter.setAccessibleName("Filter by model")
+        self.model_filter.setToolTip("Filter registers by product model")
         self.model_filter.currentIndexChanged.connect(self._on_filter_changed)
         live_header.addWidget(self.model_filter)
         live_layout.addLayout(live_header)
 
         self.live_table = QTableWidget(0, 6)
         self.live_table.setHorizontalHeaderLabels(["Name", "Address", "Type", "Raw", "Display", "Unit"])
+        self.live_table.setAccessibleName("Live register values")
+        self.live_table.setToolTip("Shows current register values read from the PLC")
         self.live_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.live_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.live_table.setAlternatingRowColors(True)
@@ -131,7 +135,7 @@ class ManualPage(QWidget):
         self._refresh_controls()
         self._refresh_filters()
         self._refresh_live_table()
-        self._live_timer.start(2000)
+        self._live_timer.start(250)
         
         self.on_plc_state_changed(self.app_state.is_plc_connected)
 
@@ -144,9 +148,13 @@ class ManualPage(QWidget):
 
     def on_plc_state_changed(self, connected: bool) -> None:
         status = "✓ PLC Online" if connected else "● PLC Offline"
-        color = "#22c55e" if connected else "#ef4444"
         self.plc_status_lbl.setText(status)
-        self.plc_status_lbl.setStyleSheet(f"font-size: 11px; color: {color};")
+        if connected:
+            self.plc_status_lbl.setProperty("status", "connected")
+        else:
+            self.plc_status_lbl.setProperty("status", "disconnected")
+        self.plc_status_lbl.style().unpolish(self.plc_status_lbl)
+        self.plc_status_lbl.style().polish(self.plc_status_lbl)
         
         # Disable buttons if offline
         for i in range(self.btn_vbox.count()):
@@ -159,6 +167,7 @@ class ManualPage(QWidget):
         while self.btn_vbox.count():
             item = self.btn_vbox.takeAt(0)
             if item.widget():
+                item.widget().hide()
                 item.widget().deleteLater()
                 
         controls = self.app_state.control_repo.get_all_controls()
@@ -208,9 +217,16 @@ class ManualPage(QWidget):
         # Get target registers
         if model_id_filter == 0: # Current
             regs = self.app_state.map_repo.get_model_mappings(self.app_state.current_model_id, enabled_only=True)
-        elif model_id_filter == -1: # All
-             # This might be heavy, just show current if many
-             regs = self.app_state.map_repo.get_model_mappings(self.app_state.current_model_id, enabled_only=True)
+        elif model_id_filter == -1: # All mapped — aggregate from all models
+            all_models = self.app_state.model_repo.get_all_models()
+            seen = set()
+            regs = []
+            for m in all_models:
+                for r in self.app_state.map_repo.get_model_mappings(m["id"], enabled_only=True):
+                    rid = r.get("register_id")
+                    if rid and rid not in seen:
+                        seen.add(rid)
+                        regs.append(r)
         else:
             regs = self.app_state.map_repo.get_model_mappings(model_id_filter, enabled_only=True)
 
@@ -219,7 +235,7 @@ class ManualPage(QWidget):
         
         for i, r in enumerate(regs):
             self.live_table.setItem(i, 0, QTableWidgetItem(r["display_name"]))
-            self.live_table.setItem(i, 1, QTableWidgetItem(f"D{r['register_address']}"))
+            self.live_table.setItem(i, 1, QTableWidgetItem(self._format_address(r)))
             self.live_table.setItem(i, 2, QTableWidgetItem(r["register_type"]))
             
             reading = data_model.get_reading(r["register_id"])
@@ -232,11 +248,34 @@ class ManualPage(QWidget):
                 self.live_table.setItem(i, 4, QTableWidgetItem("PENDING"))
                 self.live_table.setItem(i, 5, QTableWidgetItem(r["unit"]))
 
+    def _format_address(self, reg: dict) -> str:
+        prefix_by_type = {
+            "HOLDING": "D",
+            "COIL": "M",
+            "DISCRETE": "X",
+            "INPUT": "AI",
+        }
+        prefix = prefix_by_type.get(reg.get("register_type"), "")
+        return f"{prefix}{reg['register_address']}"
+
     def _execute_control(self, control: dict) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        
         if control.get("confirm_required"):
             if not ConfirmDialog.ask(self, "Manual Operation", f"Trigger manual action: {control['name']}?"):
                 return
         
         if self.app_state.write_manager:
+            user_id = self.app_state.current_user["id"] if self.app_state.current_user else None
+            if not user_id:
+                QMessageBox.warning(self, "Auth Error", "No user logged in.")
+                return
             logger.info("Manual page executing control %s", control["name"])
-            self.app_state.write_manager.execute_control(control, self.app_state.current_user["id"])
+            try:
+                self.app_state.write_manager.execute_control(control, user_id)
+                QMessageBox.information(self, "Write Success", f"Control '{control['name']}' executed successfully.")
+            except Exception as e:
+                logger.error("Manual write failed: %s", e)
+                QMessageBox.critical(self, "Write Failed", f"Failed to execute '{control['name']}':\n{e}")
+        else:
+            QMessageBox.warning(self, "Write Manager Offline", "PLC write manager is not available.")

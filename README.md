@@ -1,18 +1,33 @@
 # PLC Monitor
 
-A desktop application for monitoring and interacting with Programmable Logic Controllers (PLCs) using various protocols (Modbus TCP, Modbus RTU, etc.). The application provides a graphical user interface for real-time monitoring, data logging, and report generation.
+A desktop application for monitoring and interacting with Programmable Logic Controllers (PLCs) using various protocols (Modbus TCP, Modbus RTU, etc.). Built with PyQt6, it provides a graphical user interface for real-time monitoring, data logging, pass/fail evaluation, and report generation.
 
 ## Features
 
-- Real-time PLC data monitoring
-- Support for multiple PLC brands (Mitsubishi, Delta, etc.) and protocols (TCP, RTU)
+- Real-time PLC data monitoring with sparkline trend lines
+- Support for multiple PLC brands (Mitsubishi, Delta, Inovance) and protocols (TCP, RTU)
 - Configurable polling intervals and connection parameters
-- Data logging to SQLite database
-- Report generation (Excel, PDF)
-- User authentication and session management
-- Dark/Light theme support
+- Data logging to SQLite database (WAL mode, thread-safe)
+- Report generation (Excel, PDF) with date range filtering and summary statistics
+- User authentication and session management (3 roles: admin, supervisor, operator)
+- Dark/Light theme support with smooth transitions
 - Manual testing interface for PLC registers
-- Pass/Fail evaluation logic
+- Pass/Fail evaluation logic with per-parameter and overall results
+- Expandable/collapsible sidebar navigation
+- Breadcrumb navigation with clickable path links
+- Keyboard shortcuts for fast navigation
+- Pie chart and bar chart visualizations for reports
+- I/O list monitoring with LED-style status indicators
+- Register blocks: poll and write contiguous address ranges in one operation (bulk FC16/FC0F writes with read-back verification and audit trail)
+- Config wizard for first-run setup
+- Mock PLC server for development and testing
+- Animated spinner for loading states
+- Skeleton loaders for placeholder content during data loading
+- Toast notification system (non-blocking, auto-dismiss)
+- Property-based QSS theming (no hardcoded inline colors)
+- Font size adjustment (Small/Medium/Large)
+- High contrast accessibility mode
+- Tab order and ARIA-style accessibility labels throughout
 
 ## System Requirements
 
@@ -131,6 +146,38 @@ Upon first launch:
 2. Ensure the PLC is reachable at the specified address and port.
 3. The application will attempt to connect and start monitoring data.
 
+## Quick Start with Mock PLC
+
+For development and testing without physical PLC hardware:
+
+```bash
+# 1. Seed the database with test data
+python scripts/seed_two_wheeler.py --db plc_monitor.db --reset
+
+# 2. Start the mock PLC server (simulates a Two-Wheeler Handle Test Fixture)
+python -m src.plc.mock_server --host 127.0.0.1 --port 5020 --mode cycling
+
+# 3. In the app, configure PLC connection:
+#    Brand: Mitsubishi, Protocol: TCP
+#    Host: 127.0.0.1, Port: 5020
+```
+
+See `docs/mock_plc_server.md` for full documentation on register maps, simulation modes, and I/O configuration.
+
+## Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+1` | Navigate to Home/Model |
+| `Ctrl+2` | Navigate to Test |
+| `Ctrl+3` | Navigate to Manual |
+| `Ctrl+4` | Navigate to Config |
+| `Ctrl+5` | Navigate to I/O List |
+| `Ctrl+6` | Navigate to Reports |
+| `Ctrl+7` | Navigate to Settings |
+| `F11` | Toggle fullscreen mode |
+| `Escape` | Exit fullscreen mode |
+
 ## Project Structure
 
 ```
@@ -140,13 +187,36 @@ plc_monitor/
 ├── main.py                 # Entry point of the application
 ├── requirements.txt        # Python dependencies
 ├── schema.sql              # Database schema
+├── STATUS.md               # Development status tracker
+│
+├── assets/                 # Static assets
+│   └── themes/             # QSS theme files (dark.qss, light.qss)
+│
+├── docs/                   # Documentation
+│   └── mock_plc_server.md  # Mock PLC server documentation
+│
+├── scripts/                # Utility scripts
+│   └── seed_two_wheeler.py # Database seed script for test data
 │
 ├── src/                    # Source code
 │   ├── db/                 # Database access layer
-│   ├── logic/              # Business logic (e.g., pass/fail evaluation)
+│   ├── logic/              # Business logic (pass/fail, sessions)
 │   ├── plc/                # PLC communication drivers
 │   ├── reports/            # Report generation modules
 │   ├── ui/                 # User interface components
+│   │   ├── components/     # Reusable UI widgets
+│   │   │   ├── toast.py        # Toast notification system
+│   │   │   ├── spinner.py      # Animated spinner widget
+│   │   │   ├── skeleton.py     # Skeleton loader widgets
+│   │   │   ├── sidebar.py      # Navigation sidebar
+│   │   │   ├── top_bar.py      # Application top bar
+│   │   │   ├── breadcrumb.py   # Breadcrumb navigation
+│   │   │   ├── charts.py       # Pie and bar chart widgets
+│   │   │   ├── param_card.py   # Dashboard parameter cards
+│   │   │   └── ...             # Other components
+│   │   ├── dialogs/        # Modal dialogs
+│   │   ├── pages/          # Page-level UI modules
+│   │   └── styles/         # Theme management
 │   └── utils/              # Utility functions
 │
 ├── tests/                  # Test suite
@@ -166,6 +236,7 @@ Refer to `schema.sql` for the complete database schema. The database includes ta
 - PLC profiles and configurations
 - Register libraries and mappings
 - I/O points and their values
+- Register blocks (bulk address-range definitions with per-block grouping)
 - Messages and communication logs
 - User accounts and sessions
 - Reports and exports
@@ -217,7 +288,8 @@ Application logs are stored in the `logs/` directory. The log file rotates autom
 
 ## Acknowledgments
 
-- PyQt5 for the GUI framework
-- pymodbus for Modbus communication
-- openpyxl and reportlab for report generation
-- pytest for testing framework
+- [PyQt6](https://riverbankcomputing.com/software/pyqt/) for the GUI framework
+- [pymodbus](https://pymodbus.readthedocs.io/) for Modbus communication
+- [openpyxl](https://openpyxl.readthedocs.io/) and [reportlab](https://www.reportlab.com/) for report generation
+- [bcrypt](https://pyca.github.io/bcrypt/) for password hashing
+- [pytest](https://docs.pytest.org/) for testing framework

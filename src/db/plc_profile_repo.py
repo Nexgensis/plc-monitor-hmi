@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from .database import Database
 
@@ -89,6 +89,8 @@ class PLCProfileRepository:
         We check for a non-empty host (TCP) or com_port (RTU).
         """
         profile = self.get_profile()
+        if not profile:
+            return False
         if profile.get("protocol") == "TCP":
             return bool(profile.get("host", "").strip())
         else:

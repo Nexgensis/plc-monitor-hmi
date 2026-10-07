@@ -12,7 +12,8 @@ from src.ui.app_state import AppState
 
 class PasswordUtilityDialog(QWidget):
     """
-    Form intercepting password modifications enforcing security validation loops logically explicitly embedded dynamically natively.
+    Form intercepting password modifications enforcing security validation loops logically
+    explicitly embedded dynamically natively.
     """
 
     def __init__(self, db, app_state: AppState, router=None, parent=None):
@@ -21,6 +22,8 @@ class PasswordUtilityDialog(QWidget):
         self._user_repo = UserRepository(db)
         self._app_state = app_state
         self._router = router
+        self.setWindowTitle("Password Change")
+        self.setAccessibleName("Password change dialog")
         
         self._setup_ui()
         self._populate_users()
@@ -32,9 +35,12 @@ class PasswordUtilityDialog(QWidget):
         form_layout = QFormLayout()
         
         self.combo_user = QComboBox()
+        self.combo_user.setAccessibleName("Select user")
+        self.combo_user.setToolTip("Select the user whose password you want to change")
         
         self.edit_current = QLineEdit()
         self.edit_current.setEchoMode(QLineEdit.EchoMode.Password)
+        self.edit_current.setAccessibleName("Current password")
         self.btn_eye_current = self._make_eye_btn(self.edit_current)
         curr_layout = QHBoxLayout()
         curr_layout.setContentsMargins(0,0,0,0)
@@ -43,6 +49,7 @@ class PasswordUtilityDialog(QWidget):
         
         self.edit_new = QLineEdit()
         self.edit_new.setEchoMode(QLineEdit.EchoMode.Password)
+        self.edit_new.setAccessibleName("New password")
         self.edit_new.textChanged.connect(self._check_strength)
         self.btn_eye_new = self._make_eye_btn(self.edit_new)
         new_layout = QHBoxLayout()
@@ -52,6 +59,7 @@ class PasswordUtilityDialog(QWidget):
         
         self.edit_confirm = QLineEdit()
         self.edit_confirm.setEchoMode(QLineEdit.EchoMode.Password)
+        self.edit_confirm.setAccessibleName("Confirm new password")
         self.btn_eye_confirm = self._make_eye_btn(self.edit_confirm)
         confirm_layout = QHBoxLayout()
         confirm_layout.setContentsMargins(0,0,0,0)
@@ -65,15 +73,22 @@ class PasswordUtilityDialog(QWidget):
         
         layout.addLayout(form_layout)
         
+        strength_label = QLabel("Password Strength:")
+        strength_label.setObjectName("password_strength_lbl")
+        layout.addWidget(strength_label)
+
         self.progress_strength = QProgressBar()
+        self.progress_strength.setObjectName("password_strength_bar")
+        self.progress_strength.setAccessibleName("Password strength indicator")
+        self.progress_strength.setToolTip("Shows password strength from weak to strong")
         self.progress_strength.setRange(0, 100)
         self.progress_strength.setValue(0)
         self.progress_strength.setTextVisible(False)
         self.progress_strength.setFixedHeight(10)
-        layout.addWidget(QLabel("Password Strength:"))
         layout.addWidget(self.progress_strength)
         
         self.lbl_status = QLabel()
+        self.lbl_status.setObjectName("password_status")
         self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_status.hide()
         layout.addWidget(self.lbl_status)
@@ -83,9 +98,13 @@ class PasswordUtilityDialog(QWidget):
         btn_layout = QHBoxLayout()
         self.btn_close = QPushButton("Close")
         self.btn_close.setObjectName("btn_secondary")
+        self.btn_close.setAccessibleName("Close")
         self.btn_close.clicked.connect(self._on_close)
         
         self.btn_change = QPushButton("Change Password")
+        self.btn_change.setObjectName("btn_success")
+        self.btn_change.setAccessibleName("Change password")
+        self.btn_change.setToolTip("Save the new password")
         self.btn_change.clicked.connect(self._on_change_clicked)
         
         btn_layout.addStretch()
@@ -143,11 +162,14 @@ class PasswordUtilityDialog(QWidget):
         self.progress_strength.setValue(score)
         
         if score < 40:
-            self.progress_strength.setStyleSheet("QProgressBar::chunk { background-color: #c0392b; }")
+            self.progress_strength.setProperty("strength", "weak")
         elif score <= 70:
-            self.progress_strength.setStyleSheet("QProgressBar::chunk { background-color: #f39c12; }")
+            self.progress_strength.setProperty("strength", "medium")
         else:
-            self.progress_strength.setStyleSheet("QProgressBar::chunk { background-color: #2ecc71; }")
+            self.progress_strength.setProperty("strength", "strong")
+
+        self.progress_strength.style().unpolish(self.progress_strength)
+        self.progress_strength.style().polish(self.progress_strength)
 
     def _on_change_clicked(self) -> None:
         user_id = self.combo_user.currentData()
@@ -175,7 +197,7 @@ class PasswordUtilityDialog(QWidget):
         success = self._user_repo.change_password(user_id, curr_pwd, new_pwd)
         if success:
             self.lbl_status.setText("Password changed successfully")
-            self.lbl_status.setStyleSheet("color: #2ecc71; font-weight: bold;")
+            self.lbl_status.setProperty("success", True)
             self.lbl_status.show()
             self.edit_current.clear()
             self.edit_new.clear()
@@ -185,5 +207,5 @@ class PasswordUtilityDialog(QWidget):
 
     def _show_error(self, msg: str) -> None:
         self.lbl_status.setText(msg)
-        self.lbl_status.setStyleSheet("color: #c0392b; font-weight: bold;")
+        self.lbl_status.setProperty("success", False)
         self.lbl_status.show()

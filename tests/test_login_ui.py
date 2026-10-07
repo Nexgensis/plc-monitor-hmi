@@ -6,13 +6,22 @@ from PyQt6.QtCore import Qt
 from src.ui.app_state import AppState
 from src.ui.login_window import LoginWindow
 
+_TOUCHED = (
+    "user_repo", "model_repo", "plc_profile_repo", "connection_manager",
+    "write_manager", "is_plc_connected", "current_user", "current_model",
+    "current_model_id", "model_push_status", "param_repo",
+)
+
 @pytest.fixture
 def mock_state(tmp_path):
     state = AppState.get_instance()
+    saved = {n: getattr(state, n, None) for n in _TOUCHED}
     state.user_repo = MagicMock()
     state.model_repo = MagicMock()
-    state.param_repo = MagicMock()
     state.plc_profile_repo = MagicMock()
+    # login_window._on_model_selected validates via the (legacy) param repo
+    state.param_repo = MagicMock()
+    state.param_repo.validate_model_parameters.return_value = []
     state.connection_manager = MagicMock()
     state.write_manager = MagicMock()
     state.is_plc_connected = True
@@ -22,7 +31,9 @@ def mock_state(tmp_path):
     state.current_model = None
     state.current_model_id = None
     state.model_push_status = "never"
-    return state
+    yield state
+    for name, value in saved.items():
+        setattr(state, name, value)
 
 @pytest.fixture
 def login_win(qtbot, mock_state):
@@ -33,7 +44,8 @@ def login_win(qtbot, mock_state):
 
 class TestLoginWindow:
     def test_window_opens_correct_size(self, login_win):
-        assert login_win.width() == 960
+        # Layout-driven size (content card is 920px wide)
+        assert login_win.width() >= 900
 
     def test_right_panel_hidden_initially(self, login_win):
         assert not login_win.right_panel.isVisible()

@@ -29,8 +29,8 @@ class TestAddressConversion:
         assert compute_modbus_address(10, "COIL", "mitsubishi") == 11
 
     def test_coil_delta_m10(self):
-        # Delta M0 = 2049, so M10 = 2059
-        assert compute_modbus_address(10, "COIL", "delta") == 2059
+        # Delta M0 protocol address is 0x0800, so M10 is 2058.
+        assert compute_modbus_address(10, "COIL", "delta") == 2058
 
     def test_discrete_mitsubishi_x0(self):
         # Mitsubishi X0 = 0x400 (1024)
@@ -103,6 +103,39 @@ class TestMitsubishiDriver:
         driver.read_registers(100, "HOLDING", 1)
         client.read_holding_registers.assert_called_once_with(
             address=100, count=1, slave=1
+        )
+
+    @patch('src.plc.mitsubishi_driver.ModbusTcpClient')
+    def test_read_coil_calls_correct_pymodbus_fn(self, MockClient):
+        client = MockClient.return_value
+        driver = MitsubishiDriver("127.0.0.1", 502)
+        driver._client = client
+
+        driver.read_registers(10, "COIL", 1)
+        client.read_coils.assert_called_once_with(
+            address=11, count=1, slave=1
+        )
+
+    @patch('src.plc.mitsubishi_driver.ModbusTcpClient')
+    def test_read_discrete_calls_correct_pymodbus_fn(self, MockClient):
+        client = MockClient.return_value
+        driver = MitsubishiDriver("127.0.0.1", 502)
+        driver._client = client
+
+        driver.read_registers(0, "DISCRETE", 1)
+        client.read_discrete_inputs.assert_called_once_with(
+            address=1024, count=1, slave=1
+        )
+
+    @patch('src.plc.mitsubishi_driver.ModbusTcpClient')
+    def test_read_input_calls_correct_pymodbus_fn(self, MockClient):
+        client = MockClient.return_value
+        driver = MitsubishiDriver("127.0.0.1", 502)
+        driver._client = client
+
+        driver.read_registers(5, "INPUT", 1)
+        client.read_input_registers.assert_called_once_with(
+            address=5, count=1, slave=1
         )
 
     @patch('src.plc.mitsubishi_driver.ModbusTcpClient')

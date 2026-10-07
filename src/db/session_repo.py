@@ -35,7 +35,8 @@ class SessionRepository:
         cursor = self.db.execute(query, (model_id, operator_id))
         return cursor.lastrowid
 
-    def close_session(self, session_id: int, ok_count: int, ng_count: int, batch_count: int, notes: str = "", overall_result: str = None) -> bool:
+    def close_session(self, session_id: int, ok_count: int, ng_count: int, batch_count: int,
+                      notes: str = "", overall_result: str = None) -> bool:
         """Alias for end_session to match UI/Logic expectations."""
         # Note: Logic layer sends overall_result in its own way sometimes
         res = overall_result or "PENDING"
@@ -78,12 +79,13 @@ class SessionRepository:
         query = """
             INSERT INTO test_results (
                 session_id, register_id, display_name, group_name,
-                measured_value, raw_value, result, timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','utc'))
+                measured_value, raw_value, result, timestamp,
+                limit_min, limit_max
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now','utc'), ?, ?)
         """
         params = (
             session_id, parameter_id, param_name, module_name,
-            measured_value, raw_value, result
+            measured_value, raw_value, result, limit_min, limit_max
         )
         cursor = self.db.execute(query, params)
         return cursor.lastrowid
@@ -111,3 +113,15 @@ class SessionRepository:
         query = "INSERT INTO session_comments (session_id, user_id, comment) VALUES (?, ?, ?)"
         cursor = self.db.execute(query, (session_id, user_id, comment))
         return cursor.lastrowid
+
+    def increment_ok(self, session_id: int) -> bool:
+        """Increments the ok_count for a session."""
+        query = "UPDATE test_sessions SET ok_count = ok_count + 1 WHERE id = ?"
+        self.db.execute(query, (session_id,))
+        return True
+
+    def increment_ng(self, session_id: int) -> bool:
+        """Increments the ng_count for a session."""
+        query = "UPDATE test_sessions SET ng_count = ng_count + 1 WHERE id = ?"
+        self.db.execute(query, (session_id,))
+        return True

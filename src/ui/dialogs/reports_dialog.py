@@ -5,7 +5,7 @@ Main reports interface for searching, previewing, and exporting test data.
 
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -13,13 +13,11 @@ from PyQt6.QtWidgets import (
     QSplitter, QProgressBar, QAbstractItemView, QHeaderView,
     QFileDialog, QMessageBox, QFrame, QWidget
 )
-from PyQt6.QtCore import Qt, QDate, pyqtSlot
+from PyQt6.QtCore import Qt, QDate, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 
 from src.ui.app_state import AppState
-from src.reports.excel_exporter import ExcelExporter
-from src.reports.pdf_exporter import PDFExporter
-from src.reports.report_worker import ReportWorker
+from src.utils.exporters import ExcelExporter, PDFExporter
 
 log = logging.getLogger(__name__)
 
@@ -31,12 +29,11 @@ class ReportsDialog(QDialog):
     def __init__(self, app_state: AppState, parent=None):
         super().__init__(parent)
         self._state = app_state
-        self._excel_exp = ExcelExporter(app_state.report_repo)
-        self._pdf_exp = PDFExporter(app_state.report_repo)
         self._current_session_id = None
-        self._worker: ReportWorker | None = None
+        self._worker = None
         
         self.setWindowTitle("Historical Reports & Data Export")
+        self.setAccessibleName("Reports dialog")
         self.resize(1060, 700)
         
         self._setup_ui()
@@ -50,42 +47,48 @@ class ReportsDialog(QDialog):
 
         # 1. FILTER BAR
         filter_bar = QFrame()
-        filter_bar.setObjectName("card")
-        filter_bar.setStyleSheet("QFrame#card { background-color: #f8f9fc; border: 1px solid #d0d8e8; border-radius: 4px; }")
+        filter_bar.setObjectName("reports_dialog_filter")
         filter_layout = QHBoxLayout(filter_bar)
         filter_layout.setContentsMargins(12, 10, 12, 10)
         
         filter_layout.addWidget(QLabel("Model:"))
         self.model_filter = QComboBox()
         self.model_filter.setMinimumWidth(180)
+        self.model_filter.setAccessibleName("Filter by model")
+        self.model_filter.setToolTip("Select a model to filter session results")
         filter_layout.addWidget(self.model_filter)
         
         filter_layout.addWidget(QLabel("  From:"))
         self.date_from = QDateEdit()
         self.date_from.setCalendarPopup(True)
         self.date_from.setDate(QDate.currentDate().addDays(-30))
+        self.date_from.setAccessibleName("Start date")
         filter_layout.addWidget(self.date_from)
         
         filter_layout.addWidget(QLabel("  To:"))
         self.date_to = QDateEdit()
         self.date_to.setCalendarPopup(True)
         self.date_to.setDate(QDate.currentDate())
+        self.date_to.setAccessibleName("End date")
         filter_layout.addWidget(self.date_to)
         
         self.btn_search = QPushButton("Search")
-        self.btn_search.setStyleSheet("background: #1e2d4a; color: white; font-weight: bold; padding: 5px 15px;")
+        self.btn_search.setObjectName("reports_dialog_search_btn")
+        self.btn_search.setAccessibleName("Search")
+        self.btn_search.setToolTip("Search for sessions matching filters")
         self.btn_search.clicked.connect(self._on_search)
         filter_layout.addWidget(self.btn_search)
         
         self.btn_clear = QPushButton("Clear")
-        self.btn_clear.setStyleSheet("padding: 5px 15px;")
+        self.btn_clear.setObjectName("reports_dialog_clear_btn")
+        self.btn_clear.setAccessibleName("Clear filters")
         self.btn_clear.clicked.connect(self._on_clear_filters)
         filter_layout.addWidget(self.btn_clear)
         
         filter_layout.addStretch()
         
         self.result_count_lbl = QLabel("0 sessions")
-        self.result_count_lbl.setStyleSheet("color: #6c757d; font-weight: bold;")
+        self.result_count_lbl.setObjectName("reports_dialog_result_count")
         filter_layout.addWidget(self.result_count_lbl)
         
         main_layout.addWidget(filter_bar)
@@ -95,6 +98,8 @@ class ReportsDialog(QDialog):
         
         # LEFT: Sessions Table
         self.sessions_table = QTableWidget()
+        self.sessions_table.setAccessibleName("Session results")
+        self.sessions_table.setToolTip("Table of test sessions matching the current filters")
         self.sessions_table.setColumnCount(10)
         self.sessions_table.setHorizontalHeaderLabels([
             "#", "Date", "Time", "Model", "Operator", 
@@ -116,12 +121,12 @@ class ReportsDialog(QDialog):
         
         # RIGHT: Detail Panel
         self.detail_panel = QFrame()
-        self.detail_panel.setStyleSheet("background-color: white; border: 1px solid #d0d8e8; border-radius: 4px;")
+        self.detail_panel.setObjectName("reports_dialog_detail")
         self.detail_layout = QVBoxLayout(self.detail_panel)
         
         self.placeholder_lbl = QLabel("Select a session to view")
         self.placeholder_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.placeholder_lbl.setStyleSheet("color: #6c757d; font-style: italic;")
+        self.placeholder_lbl.setObjectName("reports_dialog_placeholder")
         self.detail_layout.addWidget(self.placeholder_lbl)
         
         # Wrapped detail content
@@ -130,13 +135,13 @@ class ReportsDialog(QDialog):
         self.dc_layout.setContentsMargins(10, 10, 10, 10)
         
         self.session_title = QLabel()
-        self.session_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #1e2d4a;")
+        self.session_title.setObjectName("reports_dialog_session_title")
         self.dc_layout.addWidget(self.session_title)
         
         self.overall_result_badge = QLabel()
         self.overall_result_badge.setMinimumHeight(40)
         self.overall_result_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.overall_result_badge.setStyleSheet("font-size: 18px; font-weight: bold; color: white; border-radius: 4px;")
+        self.overall_result_badge.setObjectName("overall_result_badge")
         self.dc_layout.addWidget(self.overall_result_badge)
         
         self.results_preview = QTableWidget()
@@ -150,7 +155,7 @@ class ReportsDialog(QDialog):
         self.dc_layout.addWidget(self.results_preview)
         
         self.alarm_lbl = QLabel()
-        self.alarm_lbl.setStyleSheet("color: #d4890a; font-weight: bold;")
+        self.alarm_lbl.setObjectName("reports_dialog_alarm")
         self.alarm_lbl.hide()
         self.dc_layout.addWidget(self.alarm_lbl)
         
@@ -169,7 +174,7 @@ class ReportsDialog(QDialog):
         pa_layout.setContentsMargins(0, 0, 0, 0)
         
         self.progress_lbl = QLabel("Generating...")
-        self.progress_lbl.setStyleSheet("font-size: 11px;")
+        self.progress_lbl.setObjectName("reports_dialog_progress")
         pa_layout.addWidget(self.progress_lbl)
         
         self.export_progress = QProgressBar()
@@ -187,32 +192,41 @@ class ReportsDialog(QDialog):
         
         export_bar = QHBoxLayout()
         self.selected_lbl = QLabel("No session selected")
-        self.selected_lbl.setStyleSheet("color: #6c757d;")
+        self.selected_lbl.setObjectName("reports_dialog_selected")
         export_bar.addWidget(self.selected_lbl)
         
         export_bar.addStretch()
         
         self.btn_ex_sess = QPushButton("Excel — Session")
-        self.btn_ex_sess.setStyleSheet("background: #27ae60; color: white; font-weight: bold; padding: 6px 12px;")
+        self.btn_ex_sess.setObjectName("reports_dialog_excel_btn")
+        self.btn_ex_sess.setAccessibleName("Export Excel session report")
+        self.btn_ex_sess.setToolTip("Export the selected session to an Excel file")
         self.btn_ex_sess.clicked.connect(self._on_export_excel_session)
         export_bar.addWidget(self.btn_ex_sess)
         
         self.btn_ex_shift = QPushButton("Excel — Shift")
-        self.btn_ex_shift.setStyleSheet("background: #27ae60; color: white; font-weight: bold; padding: 6px 12px;")
+        self.btn_ex_shift.setObjectName("reports_dialog_excel_btn")
+        self.btn_ex_shift.setAccessibleName("Export Excel shift report")
+        self.btn_ex_shift.setToolTip("Export all sessions in the date range to an Excel file")
         self.btn_ex_shift.clicked.connect(self._on_export_excel_shift)
         export_bar.addWidget(self.btn_ex_shift)
         
         self.btn_pdf = QPushButton("PDF Certificate")
-        self.btn_pdf.setStyleSheet("background: #c0392b; color: white; font-weight: bold; padding: 6px 12px;")
+        self.btn_pdf.setObjectName("reports_dialog_pdf_btn")
+        self.btn_pdf.setAccessibleName("Export PDF certificate")
+        self.btn_pdf.setToolTip("Export the selected session as a PDF certificate")
         self.btn_pdf.clicked.connect(self._on_export_pdf)
         export_bar.addWidget(self.btn_pdf)
         
         self.btn_open_folder = QPushButton("Open Reports Folder")
+        self.btn_open_folder.setAccessibleName("Open reports folder")
+        self.btn_open_folder.setToolTip("Open the folder where reports are saved")
         self.btn_open_folder.clicked.connect(self._on_open_folder)
         export_bar.addWidget(self.btn_open_folder)
         
         # Initial state
         self.btn_ex_sess.setEnabled(False)
+        self.btn_ex_shift.setEnabled(False)
         self.btn_pdf.setEnabled(False)
         
         main_layout.addLayout(export_bar)
@@ -302,6 +316,7 @@ class ReportsDialog(QDialog):
             self._show_session_detail(detail)
             self.selected_lbl.setText(f"Session #{session_id} selected")
             self.btn_ex_sess.setEnabled(True)
+            self.btn_ex_shift.setEnabled(True)
             self.btn_pdf.setEnabled(True)
 
     def _show_session_detail(self, detail: dict) -> None:
@@ -320,12 +335,14 @@ class ReportsDialog(QDialog):
         has_ng = session["ng_count"] > 0
         if has_ng:
             self.overall_result_badge.setText("FAIL")
-            self.overall_result_badge.setStyleSheet("background: #c0392b; font-size: 18px; font-weight: bold; color: white; border-radius: 4px;")
-            self.overall_result_badge.setObjectName("lbl_fail")
+            self.overall_result_badge.setProperty("result", "fail")
+            self.overall_result_badge.style().unpolish(self.overall_result_badge)
+            self.overall_result_badge.style().polish(self.overall_result_badge)
         else:
             self.overall_result_badge.setText("PASS")
-            self.overall_result_badge.setStyleSheet("background: #1a6b3a; font-size: 18px; font-weight: bold; color: white; border-radius: 4px;")
-            self.overall_result_badge.setObjectName("lbl_pass")
+            self.overall_result_badge.setProperty("result", "pass")
+            self.overall_result_badge.style().unpolish(self.overall_result_badge)
+            self.overall_result_badge.style().polish(self.overall_result_badge)
             
         # Preview table
         self.results_preview.setRowCount(0)
@@ -393,20 +410,53 @@ class ReportsDialog(QDialog):
         )
         if not path: return
         
-        self._start_export("pdf_certificate", path, session_id=self._current_session_id)
+        self._start_export("pdf_cert", path, session_id=self._current_session_id)
 
     def _start_export(self, report_type: str, output_path: str, **kwargs) -> None:
-        os.makedirs("reports", exist_ok=True)
+        os.makedirs("reports_output", exist_ok=True)
         
         self._set_export_buttons_enabled(False)
         self.progress_area.show()
         self.export_progress.setValue(0)
         self.progress_lbl.setText("Initializing...")
         
-        exporter = self._excel_exp if "excel" in report_type else self._pdf_exp
+        # Use consolidated exporter static methods
+        class _Worker(QThread):
+            finished = pyqtSignal(str)
+            error = pyqtSignal(str)
+            def __init__(self, repo, rtype, path, kw):
+                super().__init__()
+                self.repo = repo
+                self.rtype = rtype
+                self.path = path
+                self.kw = kw
+            def run(self):
+                try:
+                    if self.rtype == "excel_session":
+                        detail = self.repo.get_session_detail(self.kw.get("session_id"))
+                        res = ExcelExporter.export_session(self.path, detail)
+                    elif self.rtype == "pdf_cert":
+                        detail = self.repo.get_session_detail(self.kw.get("session_id"))
+                        res = PDFExporter.export_session(self.path, detail)
+                    elif self.rtype in ("excel_shift", "pdf_shift"):
+                        mid = self.kw.get("model_id")
+                        df = self.kw.get("date_from")
+                        dt = self.kw.get("date_to")
+                        sessions = self.repo.get_sessions_summary(mid, df, dt)
+                        all_res = self.repo.get_all_results_for_range(mid, df, dt)
+                        data = {"sessions": sessions, "results": all_res,
+                                "generated_at": __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+                        if self.rtype == "excel_shift":
+                            res = ExcelExporter.export_bulk(self.path, data)
+                        else:
+                            res = PDFExporter.export_bulk(self.path, data)
+                    else:
+                        res = f"Error: Unknown report type {self.rtype}"
+                    self.finished.emit(res)
+                except Exception as e:
+                    self.error.emit(str(e))
         
-        self._worker = ReportWorker(report_type, exporter, output_path, **kwargs)
-        self._worker.progress.connect(self._on_worker_progress)
+        self._worker = _Worker(self._state.report_repo, report_type, output_path, kwargs)
         self._worker.finished.connect(self._on_export_done)
         self._worker.error.connect(self._on_export_error)
         self._worker.start()
@@ -441,6 +491,6 @@ class ReportsDialog(QDialog):
         self.btn_search.setEnabled(enabled)
 
     def _on_open_folder(self) -> None:
-        folder = os.path.abspath("reports")
+        folder = os.path.abspath("reports_output")
         os.makedirs(folder, exist_ok=True)
         os.startfile(folder)

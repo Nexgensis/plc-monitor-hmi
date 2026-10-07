@@ -15,7 +15,7 @@ from PyQt6.QtGui import QColor, QFont
 
 from src.ui.app_state import AppState
 from src.utils.constants import (
-    WRITE_MANUAL, COLOR_NAVY, COLOR_WHITE, COLOR_AMBER
+    WRITE_MANUAL, COLOR_NAVY, COLOR_WHITE
 )
 
 log = logging.getLogger(__name__)
@@ -84,8 +84,7 @@ class ManualGrid(QWidget):
                 self.grid.setItem(0, 0, item)
             elif 1 <= row_idx <= 3:
                 btn = QPushButton(label)
-                btn.setStyleSheet(f"background:{COLOR_NAVY}; color:{COLOR_WHITE}; font-weight:bold; border:none; padding:5px;")
-                # Label buttons in col 0 are typically read-only / non-functional markers
+                btn.setObjectName("manual_action_label_btn")
                 btn.setEnabled(False) 
                 self.grid.setCellWidget(row_idx, 0, btn)
             else:
@@ -116,8 +115,7 @@ class ManualGrid(QWidget):
             labels = ["OK", "REV", "LOAD"]
             for i, action in enumerate(actions, start=1):
                 btn = QPushButton(labels[i-1])
-                btn.setStyleSheet(f"background:{COLOR_NAVY}; color:{COLOR_WHITE}; border-radius:2px;")
-                # Use default param binding
+                btn.setObjectName("manual_action_btn")
                 btn.clicked.connect(lambda checked, a=action, p=param: self._trigger_action(a, p))
                 self.grid.setCellWidget(i, col_idx, btn)
                 
@@ -142,8 +140,6 @@ class ManualGrid(QWidget):
         Write coil to PLC via WriteManager.
         coil_addr = 400 + (param_order * 3) + action_offset
         """
-        profile = self._state.plc_profile or {}
-        # brand = profile.get("brand", "mitsubishi")
         param_order = param.get("param_order", 0)
         action_offsets = {
             "supply_ok":  0,
@@ -152,20 +148,15 @@ class ManualGrid(QWidget):
         }
         
         base_coil = 400 # Default for manual mode M coils
-        # In practice, this might be brand dependent, but following spec formula
         coil_num = base_coil + (param_order * 3) + action_offsets.get(action, 0)
         
-        # Flash button amber during write
         btn = self._get_action_button(param["param_name"], action)
         if btn:
-            btn.setStyleSheet(f"background:{COLOR_AMBER}; color:{COLOR_WHITE};")
-            QTimer.singleShot(400, lambda: btn.setStyleSheet(
-                f"background:{COLOR_NAVY}; color:{COLOR_WHITE};"
-            ))
+            btn.setProperty("active", True)
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
+            QTimer.singleShot(400, lambda b=btn: self._restore_button(b))
             
-        # Write via WriteManager (logged + verified)
-        # Note: write_and_verify is usually for D registers. 
-        # The spec says d_register=0 as a proxy for coil logging.
         if self._state.write_manager:
             self._state.write_manager.write_and_verify(
                 d_register=0,
@@ -174,7 +165,6 @@ class ManualGrid(QWidget):
                 operator_id=self._state.current_user["id"] if self._state.current_user else 0
             )
             
-        # Actually write coil
         try:
             driver = self._state.connection_manager.get_driver()
             result = driver.write_coil(coil_num, True)
@@ -184,6 +174,11 @@ class ManualGrid(QWidget):
                 log.info(f"Manual: {action} → {param['param_name']} coil M{coil_num}")
         except Exception as e:
             log.error(f"Failed to write manual coil M{coil_num}: {e}")
+
+    def _restore_button(self, btn: QPushButton) -> None:
+        btn.setProperty("active", False)
+        btn.style().unpolish(btn)
+        btn.style().polish(btn)
 
     def update_readings(self, readings: Dict[str, Any]) -> None:
         """
@@ -199,7 +194,6 @@ class ManualGrid(QWidget):
             # Row 4: output current (scaled value)
             item4 = self._value_cells.get(name, {}).get(4)
             if item4:
-                # Assuming r has scaled_value property
                 val = getattr(r, "scaled_value", 0.0)
                 item4.setText(f"{val:.3f}")
                 

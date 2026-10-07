@@ -28,11 +28,15 @@ class ParameterRepository:
         if limit_min_value >= limit_max_value:
             raise ValueError("limit_min_value must be less than limit_max_value.")
 
-        existing_name = self.db.fetchone("SELECT id FROM model_parameters WHERE model_id = ? AND param_name = ?", (model_id, param_name))
+        existing_name = self.db.fetchone(
+            "SELECT id FROM model_parameters WHERE model_id = ? AND param_name = ?", (model_id, param_name)
+        )
         if existing_name:
             raise ValueError(f"Parameter name '{param_name}' already exists for this model.")
 
-        existing_order = self.db.fetchone("SELECT id FROM model_parameters WHERE model_id = ? AND param_order = ?", (model_id, param_order))
+        existing_order = self.db.fetchone(
+            "SELECT id FROM model_parameters WHERE model_id = ? AND param_order = ?", (model_id, param_order)
+        )
         if existing_order:
             raise ValueError(f"Parameter order '{param_order}' is already used.")
 
@@ -75,7 +79,9 @@ class ParameterRepository:
         return modules
 
     def update_parameter_info(self, param_id: int, **kwargs) -> bool:
-        allowed = {"param_name", "display_name", "module_name", "param_order", "unit", "scale_factor", "enabled", "bypass"}
+        allowed = {
+            "param_name", "display_name", "module_name", "param_order", "unit", "scale_factor", "enabled", "bypass"
+        }
         updates = {k: v for k, v in kwargs.items() if k in allowed}
         if not updates:
             return False
@@ -133,7 +139,9 @@ class ParameterRepository:
         self.db.execute("DELETE FROM model_parameters WHERE id = ?", (param_id,))
         
         # Renormalize param_order
-        params = self.db.fetchall("SELECT id FROM model_parameters WHERE model_id = ? ORDER BY param_order ASC", (model_id,))
+        params = self.db.fetchall(
+            "SELECT id FROM model_parameters WHERE model_id = ? ORDER BY param_order ASC", (model_id,)
+        )
         update_data = [(i, p["id"], model_id) for i, p in enumerate(params)]
         self.db.executemany("UPDATE model_parameters SET param_order = ? WHERE id = ? AND model_id = ?", update_data)
         return True
@@ -202,11 +210,17 @@ class ParameterRepository:
         return len(insert_data)
 
     def get_parameters_for_plc_push(self, model_id: int) -> List[Dict[str, Any]]:
-        query = "SELECT * FROM model_parameters WHERE model_id = ? AND enabled = 1 AND limit_min_register > 0 ORDER BY param_order ASC"
+        query = (
+            "SELECT * FROM model_parameters WHERE model_id = ? AND enabled = 1 AND limit_min_register > 0 "
+            "ORDER BY param_order ASC"
+        )
         return self.db.fetchall(query, (model_id,))
 
     def get_parameters_for_polling(self, model_id: int) -> List[Dict[str, Any]]:
-        query = "SELECT * FROM model_parameters WHERE model_id = ? AND enabled = 1 AND measured_register > 0 ORDER BY param_order ASC"
+        query = (
+            "SELECT * FROM model_parameters WHERE model_id = ? AND enabled = 1 AND measured_register > 0 "
+            "ORDER BY param_order ASC"
+        )
         return self.db.fetchall(query, (model_id,))
 
     def validate_model_parameters(self, model_id: int) -> List[str]:
@@ -227,7 +241,8 @@ class ParameterRepository:
             if p["limit_min_value"] >= p["limit_max_value"]:
                 warnings.append(f"Parameter '{name}' has invalid limit range.")
                 
-            regs = [r for r in [p["measured_register"], p["result_register"], p["limit_min_register"], p["limit_max_register"]] if r > 0]
+            regs = [r for r in [p["measured_register"], p["result_register"],
+                                p["limit_min_register"], p["limit_max_register"]] if r > 0]
             for r in regs:
                 if r in used_registers:
                     warnings.append(f"Register address conflict detected: {r} is used multiple times.")

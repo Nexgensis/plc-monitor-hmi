@@ -46,6 +46,40 @@ ParameterReading = RegisterReading
 
 
 @dataclass
+class BlockReading:
+    """
+    Thread-safe snapshot of one data block's (address range) latest poll.
+
+    Fields:
+        block_id:      register_blocks.id.
+        name:          Block name from CONFIG.
+        start_address: First PLC-native address of the range.
+        register_type: HOLDING, COIL, DISCRETE, or INPUT.
+        count:         Words (HOLDING/INPUT) or bits (COIL/DISCRETE) polled.
+        raw_words:     Raw values index 0 = start_address (words 0..65535,
+                       bits 0/1). Last-good values when stale=True.
+        elements:      Decoded element values (data_type stride applied,
+                       scale_factor included) — display-ready.
+        read_success:  True if the last poll fully succeeded.
+        error:         Error text when read_success is False.
+        stale:         True when read_success is False but raw_words/elements
+                       still hold the previous successful poll.
+        timestamp:     UTC timestamp of this snapshot.
+    """
+    block_id: int
+    name: str
+    start_address: int
+    register_type: str
+    count: int
+    raw_words: list[int]
+    elements: list[float]
+    read_success: bool
+    error: str
+    stale: bool
+    timestamp: datetime
+
+
+@dataclass
 class PLCStatus:
     """
     Thread-safe snapshot of the PLC connection and status bar state.
@@ -81,6 +115,7 @@ class PLCDataModel:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._readings: dict[int, RegisterReading] = {}  # key: register_id
+        self._block_readings: dict[int, BlockReading] = {}  # key: block_id
         self._status = PLCStatus()
 
     def update_reading(self, register_id: int, reading: RegisterReading) -> None:
@@ -112,6 +147,23 @@ class PLCDataModel:
         with self._lock:
             self._status = status
 
+    # ── Data block readings ─────────────────────────────────────────
+
+    def update_block_reading(self, block_id: int, reading: BlockReading) -> None:
+        """Atomic update of a single block reading."""
+        with self._lock:
+            self._block_readings[block_id] = reading
+
+    def get_block_reading(self, block_id: int) -> BlockReading | None:
+        """Returns a snapshot of a single block reading."""
+        with self._lock:
+            return self._block_readings.get(block_id)
+
+    def get_all_block_readings(self) -> dict[int, BlockReading]:
+        """Returns a copy of all block readings."""
+        with self._lock:
+            return self._block_readings.copy()
+
     def get_status(self) -> PLCStatus:
         """Returns a snapshot of the current PLC status."""
         with self._lock:
@@ -123,4 +175,5 @@ class PLCDataModel:
         """Clears all readings and resets status to default."""
         with self._lock:
             self._readings.clear()
+            self._block_readings.clear()
             self._status = PLCStatus()

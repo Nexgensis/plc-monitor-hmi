@@ -6,9 +6,8 @@ Main window for manual operation testing, isolating discrete coil triggers.
 import logging
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QFrame, QDoubleSpinBox, QPushButton, QSizePolicy
+    QLabel, QFrame, QDoubleSpinBox, QPushButton
 )
-from PyQt6.QtCore import Qt
 
 from src.ui.app_state import AppState
 from src.ui.components.nav_bar import NavBar
@@ -41,7 +40,8 @@ class ManualTestWindow(QMainWindow):
         frame_gm.moveCenter(screen)
         self.move(frame_gm.topLeft())
         
-        model_name = self._state.current_model.get("model", {}).get("name", "Unknown") if self._state.current_model else "No Model"
+        model_name = (self._state.current_model.get("model", {}).get("name", "Unknown")
+                      if self._state.current_model else "No Model")
         self.setWindowTitle(f"Manual Operation — {model_name}")
         
         central_widget = QWidget()
@@ -62,7 +62,9 @@ class ManualTestWindow(QMainWindow):
         
         card = QFrame()
         card.setObjectName("white_card")
-        card.setStyleSheet("QFrame#white_card { background-color: white; border-radius: 8px; border: 1px solid #d0d8e8; }")
+        card.setStyleSheet(
+            "QFrame#white_card { background-color: white; border-radius: 8px; border: 1px solid #d0d8e8; }"
+        )
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(16, 16, 16, 16)
         

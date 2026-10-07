@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS model_register_map (
     card_position INTEGER DEFAULT 0,       -- Manual order for dashboard layout
     pass_value INTEGER DEFAULT 1,          -- Raw value indicating PASS for RESULT role
     fail_value INTEGER DEFAULT 2,          -- Raw value indicating FAIL for RESULT role
+    limit_min REAL DEFAULT 0.0,            -- Lower spec threshold for MEASURED role (0.0 = unconfigured)
+    limit_max REAL DEFAULT 0.0,            -- Upper spec threshold for MEASURED role (0.0 = unconfigured)
     UNIQUE(model_id, register_id)          -- Prevent duplicate register mapping per model
 );
 
@@ -143,6 +145,41 @@ CREATE TABLE IF NOT EXISTS io_list_config (
     on_color TEXT DEFAULT '#22c55e',       -- UI color hex for non-zero
     off_color TEXT DEFAULT '#5a7a9a',      -- UI color hex for zero
     is_active INTEGER DEFAULT 1            -- Soft-delete flag
+);
+
+--- TABLE 7B: register_blocks ---
+-- Bulk address-range definitions for batched Modbus reads / multi-writes.
+-- A block describes a contiguous range: start_address + count
+-- (count = bits for COIL/DISCRETE, words for HOLDING/INPUT).
+CREATE TABLE IF NOT EXISTS register_blocks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Unique block identifier
+    name TEXT NOT NULL UNIQUE,             -- Block name (e.g., 'Safety Coils 0-99')
+    description TEXT DEFAULT '',           -- Optional long description
+    register_type TEXT NOT NULL            -- Modbus table the range belongs to
+      CHECK(register_type IN ('HOLDING','COIL','DISCRETE','INPUT')),
+    start_address INTEGER NOT NULL         -- First PLC-native address (0-65535)
+      CHECK(start_address >= 0 AND start_address <= 65535),
+    count INTEGER NOT NULL                 -- Range size (bits or words)
+      CHECK(count > 0 AND count <= 10000),
+    data_type TEXT NOT NULL DEFAULT 'INT16' -- Element decoding for register blocks
+      CHECK(data_type IN ('BOOL','INT16','UINT16','INT32','UINT32','FLOAT32','BCD16','BCD32')),
+    scale_factor REAL DEFAULT 1.0,         -- Engineering-unit multiplier
+    decimal_places INTEGER DEFAULT 2,      -- Display decimals (0-6)
+    unit TEXT DEFAULT '',                  -- Engineering unit string
+    word_swap INTEGER DEFAULT 0,           -- 1 = swap 32-bit word order
+    access TEXT NOT NULL DEFAULT 'READ_ONLY' -- WRITE allowed only for HOLDING/COIL
+      CHECK(access IN ('READ_ONLY','READ_WRITE')),
+    group_name TEXT DEFAULT '',            -- Tab grouping on the I/O page
+    row_order INTEGER DEFAULT 0,           -- Display order within group
+    show_value INTEGER DEFAULT 1,          -- 1=Numeric, 0=ON/OFF labels only (bit blocks)
+    on_label TEXT DEFAULT 'ON',            -- Label when bit is set
+    off_label TEXT DEFAULT 'OFF',          -- Label when bit is clear
+    on_color TEXT DEFAULT '#22c55e',       -- UI color for set bit
+    off_color TEXT DEFAULT '#5a7a9a',      -- UI color for clear bit
+    is_active INTEGER DEFAULT 1,           -- Soft-disable flag (0 = not polled)
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT DEFAULT (datetime('now','utc')),
+    updated_at TEXT DEFAULT (datetime('now','utc'))
 );
 
 --- TABLE 8: message_register ---
@@ -191,7 +228,9 @@ CREATE TABLE IF NOT EXISTS test_results (
     raw_value INTEGER DEFAULT 0,           -- Raw integer from PLC
     result TEXT NOT NULL DEFAULT 'PENDING' -- Outcome: PASS, FAIL, BYPASS
       CHECK(result IN ('PASS','FAIL','BYPASS','PENDING')),
-    timestamp TEXT DEFAULT (datetime('now','utc')) -- Measurement timestamp
+    timestamp TEXT DEFAULT (datetime('now','utc')), -- Measurement timestamp
+    limit_min REAL DEFAULT 0.0,            -- Lower threshold snapshot at time of test
+    limit_max REAL DEFAULT 0.0             -- Upper threshold snapshot at time of test
 );
 
 --- TABLE 11: plc_write_log ---
@@ -200,6 +239,7 @@ CREATE TABLE IF NOT EXISTS plc_write_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Unique log entry ID
     timestamp TEXT DEFAULT (datetime('now','utc')), -- Time of write
     register_id INTEGER REFERENCES register_library(id) ON DELETE CASCADE, -- Target register (if from library)
+    block_id INTEGER REFERENCES register_blocks(id) ON DELETE SET NULL, -- Target block (if bulk write)
     register_address INTEGER NOT NULL,     -- Modbus address targeted
     register_name TEXT NOT NULL,           -- Name of the register at time of write
     value_written TEXT NOT NULL,           -- The value sent to the PLC
@@ -251,6 +291,8 @@ CREATE INDEX IF NOT EXISTS idx_write_log_ts
   ON plc_write_log(timestamp);            -- Chronological audit searches
 CREATE INDEX IF NOT EXISTS idx_io_list_order
   ON io_list_config(group_name, row_order); -- Sorted I/O display
+CREATE INDEX IF NOT EXISTS idx_register_blocks_order
+  ON register_blocks(group_name, row_order); -- Sorted block display
 CREATE INDEX IF NOT EXISTS idx_msg_reg_value
   ON message_register(register_id, trigger_value); -- Fast status message lookup
 CREATE INDEX IF NOT EXISTS idx_sessions_model
@@ -258,15 +300,10 @@ CREATE INDEX IF NOT EXISTS idx_sessions_model
 CREATE INDEX IF NOT EXISTS idx_sessions_started
   ON test_sessions(started_at);           -- Filtering reports by date
 
--- End of Schema version 4.0
+-- End of Schema version 4.3
 
 --- INITIAL DATA ---
--- Default users (Username matches Role for easy login)
-INSERT OR IGNORE INTO users (username, role, password_hash) VALUES ('ADMIN', 'ADMIN', 'ADMIN');
-INSERT OR IGNORE INTO users (username, role, password_hash) VALUES ('OPERATOR', 'OPERATOR', 'OPERATOR');
-INSERT OR IGNORE INTO users (username, role, password_hash) VALUES ('SUPERVISOR', 'SUPERVISOR', 'SUPERVISOR');
-
--- Default config
+-- Default app config only. User accounts are created by the secure seed routine.
 INSERT OR IGNORE INTO app_config (key, value) VALUES ('first_run', '1');
 INSERT OR IGNORE INTO app_config (key, value) VALUES ('theme', 'dark');
 INSERT OR IGNORE INTO app_config (key, value) VALUES ('language', 'en');

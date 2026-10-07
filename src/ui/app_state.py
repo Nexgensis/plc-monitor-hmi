@@ -20,6 +20,7 @@ from src.db.session_repo import SessionRepository
 from src.db.report_repo import ReportRepository
 from src.db.app_config_repo import AppConfigRepo
 from src.db.user_repo import UserRepository
+from src.db.block_repo import BlockRepo
 
 from src.plc.connection_manager import ConnectionManager
 from src.plc.write_manager import PLCWriteManager
@@ -34,6 +35,9 @@ class AppState:
     def __init__(self) -> None:
         if AppState._instance is not None:
             raise RuntimeError("AppState is a singleton. Use get_instance().")
+        
+        # Thread-safety lock for mutable cross-thread state
+        self._state_lock = threading.RLock()
 
         # Auth & Model
         self.current_user: Optional[Dict[str, Any]] = None
@@ -41,7 +45,7 @@ class AppState:
         self.current_model: Optional[Dict[str, Any]] = None
 
         # PLC Status
-        self.is_plc_connected: bool = False
+        self._is_plc_connected: bool = False
         self.is_plc_configured: bool = False
         self.current_theme: str = "dark"
         self.plc_profile: Optional[Dict[str, Any]] = None
@@ -50,6 +54,7 @@ class AppState:
         self.db: Optional[Database] = None
         self.connection_manager: Optional[ConnectionManager] = None
         self.write_manager: Optional[PLCWriteManager] = None
+        self.data_model = None  # PLCDataModel instance, reused across reconnects
 
         # All Repositories
         self.profile_repo: Optional[PLCProfileRepository] = None
@@ -63,12 +68,46 @@ class AppState:
         self.report_repo: Optional[ReportRepository] = None
         self.config_repo: Optional[AppConfigRepo] = None
         self.user_repo: Optional[UserRepository] = None
+        self.block_repo: Optional[BlockRepo] = None
 
         # Runtime Caches (refreshed on model change)
-        self.poll_registers: List[Dict[str, Any]] = []
+        self._poll_registers: List[Dict[str, Any]] = []
+        self._poll_blocks: List[Dict[str, Any]] = []
         self.message_lookup: Dict[int, Any] = {}
         self.message_register: Optional[Dict[str, Any]] = None
         self.dashboard_registers: List[Dict[str, Any]] = []
+
+    # ── Thread-safe properties ──────────────────────────────────────
+
+    @property
+    def is_plc_connected(self) -> bool:
+        with self._state_lock:
+            return self._is_plc_connected
+
+    @is_plc_connected.setter
+    def is_plc_connected(self, value: bool) -> None:
+        with self._state_lock:
+            self._is_plc_connected = value
+
+    @property
+    def poll_registers(self) -> List[Dict[str, Any]]:
+        with self._state_lock:
+            return self._poll_registers
+
+    @poll_registers.setter
+    def poll_registers(self, value: List[Dict[str, Any]]) -> None:
+        with self._state_lock:
+            self._poll_registers = value
+
+    @property
+    def poll_blocks(self) -> List[Dict[str, Any]]:
+        with self._state_lock:
+            return self._poll_blocks
+
+    @poll_blocks.setter
+    def poll_blocks(self, value: List[Dict[str, Any]]) -> None:
+        with self._state_lock:
+            self._poll_blocks = value
 
     @classmethod
     def get_instance(cls) -> AppState:
@@ -97,9 +136,7 @@ class AppState:
             return
 
         self.current_model_id = model_id
-        # In a real app, find by id. Prompt says: model = model_repo.get_all_models() # find by id
-        models = self.model_repo.get_all_models()
-        self.current_model = next((m for m in models if m["id"] == model_id), None)
+        self.current_model = self.model_repo.get_model(model_id)
 
         if not self.current_model:
             logger.warning("Model ID %d not found", model_id)
@@ -118,7 +155,8 @@ class AppState:
                 combined.append(r)
 
         self.poll_registers = combined
-        self.dashboard_registers = self.map_repo.get_dashboard_registers(model_id)
+        max_cards = self.config_repo.get_max_dashboard_cards() if self.config_repo else 20
+        self.dashboard_registers = self.map_repo.get_dashboard_registers(model_id, max_cards)
 
         logger.info("Model set: %s. Polling %d registers.", self.current_model["name"], len(combined))
 
@@ -128,6 +166,35 @@ class AppState:
                 self.message_register,
                 self.message_lookup
             )
+            self.connection_manager.update_block_list(self.refresh_blocks())
+
+    def refresh_blocks(self) -> List[Dict[str, Any]]:
+        """
+        Reload the active Register Blocks cache from DB.
+        Returns the new list so callers can push it to the ConnectionManager.
+        """
+        if self.block_repo:
+            blocks = self.block_repo.get_poll_blocks()
+        else:
+            blocks = []
+        self.poll_blocks = blocks
+        return blocks
+
+    def refresh_poll_config(self) -> None:
+        """
+        Rebuild poll caches after a CONFIG change (register library, I/O
+        list, messages, Register Blocks) and push them to the running
+        ConnectionManager. Called by config_page after edits.
+        """
+        self.refresh_message_config()
+        if self.current_model_id:
+            # set_model rebuilds registers AND pushes both lists
+            self.set_model(self.current_model_id)
+        else:
+            # No model selected yet — blocks still poll standalone
+            if self.connection_manager:
+                self.connection_manager.update_block_list(self.refresh_blocks())
+        logger.info("Poll config refreshed")
 
     def refresh_message_config(self) -> None:
         """Reload message register config from DB."""
@@ -156,16 +223,27 @@ class AppState:
                      msg_reg_id, len(self.message_lookup))
 
     def set_plc_profile(self, profile: Dict[str, Any]) -> None:
+        """Stores the PLC profile and determines if the connection is configured."""
         self.plc_profile = profile
         if self.profile_repo:
-            # Note: prompt says profile_repo.is_configured()
-            # If the repo doesn't have it, I'll check if host is set.
-            # Checking if PLCProfileRepository has is_configured...
-            # I checked it earlier, it doesn't have it. I should add it.
             self.is_plc_configured = self.profile_repo.is_configured()
 
     def is_admin(self) -> bool:
-        return self.current_user is not None and self.current_user.get("role") == "ADMIN"
+        """Returns True if the currently logged-in user has the ADMIN role."""
+        return (
+            self.current_user is not None
+            and str(self.current_user.get("role", "")).upper() == "ADMIN"
+        )
+
+    def is_operator(self) -> bool:
+        """Returns True if the currently logged-in user has the OPERATOR role."""
+        return (
+            self.current_user is not None
+            and str(self.current_user.get("role", "")).upper() == "OPERATOR"
+        )
+
+    def can_edit_settings(self) -> bool:
+        return self.is_admin()
 
     def can_access_config(self) -> bool:
         return self.is_admin()

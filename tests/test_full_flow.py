@@ -205,9 +205,9 @@ def run_test():
             passed += print_step(17, "Verify results (session missing)", False)
             
         # 18. Test Exporters
-        from src.reports.excel_exporter import ExcelExporter
-        ee = ExcelExporter(state.report_repo)
-        ee.generate_session_report(xlsx_path, sessions[0]["session_id"])
+        from src.utils.exporters import ExcelExporter
+        detail = state.report_repo.get_session_detail(sessions[0]["session_id"])
+        ExcelExporter.export_session(xlsx_path, detail)
         passed += print_step(18, "Generate Excel report", os.path.exists(xlsx_path))
         
         # 19. Cleanup Excel

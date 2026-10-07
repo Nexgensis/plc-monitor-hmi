@@ -1,0 +1,17 @@
+[flake8]
+max-line-length = 120
+# F401 in package __init__ files = intentional re-exports
+per-file-ignores =
+    __init__.py:F401
+# Pure-whitespace/formatting noise is tracked but not enforced
+# (real issues: F401/F541/F841/E722/E741/E501 are fixed or listed here)
+extend-ignore =
+    E117,E127,E128,E203,E221,E231,E251,E261,E301,E302,E303,E306,
+    E701,E702,W291,W292,W293,W391
+exclude =
+    .git,
+    venv,
+    __pycache__,
+    .opencode,
+    build,
+    dist

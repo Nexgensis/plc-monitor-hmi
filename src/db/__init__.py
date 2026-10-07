@@ -8,6 +8,7 @@ from .session_repo import SessionRepository
 from .report_repo import ReportRepository
 from .control_repo import ControlRegisterRepo
 from .io_list_repo import IOListRepo
+from .block_repo import BlockRepo
 from .message_repo import MessageRegisterRepo
 from .seed import seed_database
 
@@ -22,6 +23,7 @@ __all__ = [
     "ReportRepository",
     "ControlRegisterRepo",
     "IOListRepo",
+    "BlockRepo",
     "MessageRegisterRepo",
     "seed_database",
 ]

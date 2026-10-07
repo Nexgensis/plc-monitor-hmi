@@ -133,8 +133,8 @@ class ModelRepository:
                 "swap": bool(m["word_swap"]),
                 "pass_value": m["pass_value"],
                 "fail_value": m["fail_value"],
-                "limit_min": 0.0, # Placeholder until schema has limit fields
-                "limit_max": 0.0,
+                "limit_min": m.get("limit_min", 0.0),
+                "limit_max": m.get("limit_max", 0.0),
             }
             parameters.append(p)
             

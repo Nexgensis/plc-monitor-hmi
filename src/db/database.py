@@ -9,7 +9,8 @@ import sqlite3
 import threading
 import logging
 import os
-from typing import Any, Optional
+from typing import Optional
+from contextlib import contextmanager
 
 from src.utils.constants import DB_PATH
 
@@ -64,7 +65,7 @@ class Database:
         return self._local.conn
 
     def initialize(self, schema_path: str = "schema.sql") -> None:
-        """Executes the schema script to create tables and indexes."""
+        """Executes the schema script to create tables and indexes, then runs migrations."""
         if not os.path.exists(schema_path):
             logger.error("Schema file not found at %s", schema_path)
             return
@@ -81,28 +82,151 @@ class Database:
             logger.error("Failed to initialize database schema: %s", e)
             conn.rollback()
 
+        # Run migrations for existing databases
+        self._run_migrations()
+
+    def _run_migrations(self) -> None:
+        """Apply incremental schema migrations for existing databases."""
+        conn = self.get_connection()
+        migrations = [
+            ("v4.1_limit_columns", [
+                "ALTER TABLE test_results ADD COLUMN limit_min REAL DEFAULT 0.0",
+                "ALTER TABLE test_results ADD COLUMN limit_max REAL DEFAULT 0.0",
+            ]),
+            ("v4.2_mapping_limit_columns", [
+                "ALTER TABLE model_register_map ADD COLUMN limit_min REAL DEFAULT 0.0",
+                "ALTER TABLE model_register_map ADD COLUMN limit_max REAL DEFAULT 0.0",
+            ]),
+            # Phase 1 — bulk data blocks (schema.sql creates register_blocks on
+            # fresh installs; these statements cover existing databases where
+            # CREATE TABLE ... IF NOT EXISTS in schema.sql already ran, plus the
+            # plc_write_log additions that ALTER-only migration can provide).
+            ("v4.3_register_blocks", [
+                "CREATE TABLE IF NOT EXISTS register_blocks ("
+                " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                " name TEXT NOT NULL UNIQUE,"
+                " description TEXT DEFAULT '',"
+                " register_type TEXT NOT NULL"
+                "  CHECK(register_type IN ('HOLDING','COIL','DISCRETE','INPUT')),"
+                " start_address INTEGER NOT NULL"
+                "  CHECK(start_address >= 0 AND start_address <= 65535),"
+                " count INTEGER NOT NULL CHECK(count > 0 AND count <= 10000),"
+                " data_type TEXT NOT NULL DEFAULT 'INT16'"
+                "  CHECK(data_type IN ('BOOL','INT16','UINT16','INT32','UINT32','FLOAT32','BCD16','BCD32')),"
+                " scale_factor REAL DEFAULT 1.0,"
+                " decimal_places INTEGER DEFAULT 2,"
+                " unit TEXT DEFAULT '',"
+                " word_swap INTEGER DEFAULT 0,"
+                " access TEXT NOT NULL DEFAULT 'READ_ONLY'"
+                "  CHECK(access IN ('READ_ONLY','READ_WRITE')),"
+                " group_name TEXT DEFAULT '',"
+                " row_order INTEGER DEFAULT 0,"
+                " show_value INTEGER DEFAULT 1,"
+                " on_label TEXT DEFAULT 'ON',"
+                " off_label TEXT DEFAULT 'OFF',"
+                " on_color TEXT DEFAULT '#22c55e',"
+                " off_color TEXT DEFAULT '#5a7a9a',"
+                " is_active INTEGER DEFAULT 1,"
+                " created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,"
+                " created_at TEXT DEFAULT (datetime('now','utc')),"
+                " updated_at TEXT DEFAULT (datetime('now','utc'))"
+                ")",
+                "CREATE INDEX IF NOT EXISTS idx_register_blocks_order"
+                " ON register_blocks(group_name, row_order)",
+            ]),
+            ("v4.3_write_log_block_id", [
+                "ALTER TABLE plc_write_log ADD COLUMN block_id INTEGER"
+                " REFERENCES register_blocks(id) ON DELETE SET NULL",
+            ]),
+            ("v4.3_write_log_block_index", [
+                "CREATE INDEX IF NOT EXISTS idx_write_log_block"
+                " ON plc_write_log(block_id)",
+            ]),
+        ]
+        for name, statements in migrations:
+            try:
+                already_applied = conn.execute(
+                    "SELECT 1 FROM db_migrations WHERE name = ?", (name,)
+                ).fetchone()
+                if already_applied:
+                    continue
+                for stmt in statements:
+                    conn.execute(stmt)
+                conn.execute(
+                    "INSERT INTO db_migrations (name) VALUES (?)", (name,)
+                )
+                conn.commit()
+                logger.info("Migration '%s' applied successfully.", name)
+            except sqlite3.OperationalError as e:
+                # Column already exists (ALTER TABLE fails silently on duplicate)
+                if "duplicate column" in str(e):
+                    conn.execute(
+                        "INSERT OR IGNORE INTO db_migrations (name) VALUES (?)", (name,)
+                    )
+                    conn.commit()
+                    logger.info("Migration '%s' already applied (column exists).", name)
+                else:
+                    logger.error("Migration '%s' failed: %s", name, e)
+            except sqlite3.Error as e:
+                logger.error("Migration '%s' failed: %s", name, e)
+
     def execute(self, query: str, params: tuple = ()) -> sqlite3.Cursor:
         """Executes a non-returning query (INSERT, UPDATE, DELETE)."""
         conn = self.get_connection()
+        in_tx = getattr(self._local, "in_tx", False)
         try:
             cursor = conn.execute(query, params)
-            conn.commit()
+            if not in_tx:
+                conn.commit()
             return cursor
         except sqlite3.Error as e:
             logger.error("Database execute error: %s\nQuery: %s", e, query)
+            if not in_tx:
+                conn.rollback()
+            raise
+
+    @contextmanager
+    def transaction(self):
+        """
+        Context manager for atomic multi-statement transactions.
+        
+        Usage::
+            with db.transaction():
+                db.execute("INSERT ...", params)
+                db.execute("UPDATE ...", params)
+            # Auto-commits on normal exit, rolls back on exception
+
+        While active, execute()/executemany() defer their per-call commit so
+        every statement joins the same transaction (nested calls join too).
+        """
+        conn = self.get_connection()
+        if getattr(self._local, "in_tx", False):
+            yield conn  # nested — join the outer transaction
+            return
+        self._local.in_tx = True
+        try:
+            conn.execute("BEGIN")
+            yield conn
+            conn.commit()
+        except Exception:
             conn.rollback()
             raise
+        finally:
+            self._local.in_tx = False
 
     def executemany(self, query: str, params_list: list[tuple]) -> sqlite3.Cursor:
         """Executes a batch of queries."""
         conn = self.get_connection()
+        in_tx = getattr(self._local, "in_tx", False)
         try:
             cursor = conn.executemany(query, params_list)
-            conn.commit()
+            if not in_tx:
+                conn.commit()
             return cursor
         except sqlite3.Error as e:
             logger.error("Database executemany error: %s\nQuery: %s", e, query)
-            conn.rollback()
+            if not in_tx:
+                conn.rollback()
             raise
 
     def fetchone(self, query: str, params: tuple = ()) -> Optional[dict]:
@@ -114,7 +238,7 @@ class Database:
             return dict(row) if row else None
         except sqlite3.Error as e:
             logger.error("Database fetchone error: %s\nQuery: %s", e, query)
-            return None
+            raise
 
     def fetchall(self, query: str, params: tuple = ()) -> list[dict]:
         """Fetches all matching rows and returns them as a list of dictionaries."""
@@ -124,7 +248,7 @@ class Database:
             return [dict(row) for row in cursor.fetchall()]
         except sqlite3.Error as e:
             logger.error("Database fetchall error: %s\nQuery: %s", e, query)
-            return []
+            raise
 
     def close_all(self) -> None:
         """

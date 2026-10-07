@@ -8,7 +8,7 @@ Tested hardware:
 
 Modbus address mapping (Delta):
     D register n  → holding address = DELTA_HOLDING_BASE + n   (= n, same as Mitsubishi)
-    M coil n      → coil address    = DELTA_COIL_BASE + n      (= 2049 + n)
+    M coil n      → coil address    = DELTA_COIL_BASE + n      (= 2048 + n)
     X discrete n  → discrete addr   = DELTA_X_BASE + n         (= 1024 + n)
     Y coil (oct)  → coil address    = DELTA_Y_BASE + decimal   (= 1280 + dec)
 
@@ -45,7 +45,7 @@ class DeltaDriver(MitsubishiDriver):
     Inherits the full TCP connection lifecycle from MitsubishiDriver.
     Only overrides read_registers() and write_register() to pass
     brand='delta' into compute_modbus_address(), producing the correct
-    coil (2049 + M) and discrete (1024 + X) offsets for Delta hardware.
+    coil (2048 + M) and discrete (1024 + X) offsets for Delta hardware.
 
     Tested series:
         DVP-ES2, DVP-EH3, DVP-SX2, DVP-SS2, DVP-14SS2,
@@ -93,7 +93,7 @@ class DeltaDriver(MitsubishiDriver):
 
         Delegates to the same pymodbus calls as MitsubishiDriver but
         derives the Modbus address with brand='delta' so that:
-            M coil 10  → coil address 2059  (2049 + 10)
+            M coil 10  → coil address 2058  (2048 + 10)
             X input 5  → discrete addr 1029 (1024 + 5)
             D register 100 → holding addr 100 (unchanged)
 

@@ -13,9 +13,8 @@ from typing import Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QGroupBox, QFormLayout,
-    QFrame, QSizePolicy,
 )
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 
 from src.ui.app_state import AppState
 from src.utils.constants import PLC_BRAND_LABELS
@@ -96,11 +95,7 @@ class PLCConfigPanel(QWidget):
             "Brand and protocol changes require an app restart."
         )
         info_lbl.setWordWrap(True)
-        info_lbl.setStyleSheet(
-            "color: #856404; font-style: italic; font-size: 12px;"
-            " background: #fff3cd; border: 1px solid #ffc107;"
-            " border-radius: 4px; padding: 6px 10px;"
-        )
+        info_lbl.setObjectName("config_info_banner")
         root.addWidget(info_lbl)
 
         # Profile summary card
@@ -109,13 +104,13 @@ class PLCConfigPanel(QWidget):
         summary_layout.setSpacing(4)
 
         self.brand_proto_lbl = QLabel("—")
-        self.brand_proto_lbl.setStyleSheet("font-size: 13px; color: #1e2d4a; font-weight: 600;")
+        self.brand_proto_lbl.setObjectName("config_brand_proto_lbl")
 
         self.host_port_lbl = QLabel("—")
-        self.host_port_lbl.setStyleSheet("font-size: 12px; color: #5a6a8a;")
+        self.host_port_lbl.setObjectName("config_host_port_lbl")
 
         self.btn_edit = QPushButton("Edit PLC Profile")
-        self.btn_edit.setStyleSheet("background: #1e2d4a; color: white; min-width: 160px;")
+        self.btn_edit.setObjectName("btn_primary")
         self.btn_edit.setFixedWidth(180)
         self.btn_edit.clicked.connect(self._on_edit_profile)
 
@@ -135,7 +130,7 @@ class PLCConfigPanel(QWidget):
 
         self.test_result_lbl = QLabel()
         self.test_result_lbl.setWordWrap(True)
-        self.test_result_lbl.setStyleSheet("font-size: 12px;")
+        self.test_result_lbl.setObjectName("config_test_result_lbl")
         self.test_result_lbl.hide()
 
         test_layout.addWidget(self.btn_test)
@@ -152,7 +147,8 @@ class PLCConfigPanel(QWidget):
         self.state_reg_lbl = QLabel("—")
         self.start_coil_lbl = QLabel("—")
         self.connected_lbl  = QLabel("● Disconnected")
-        self.connected_lbl.setStyleSheet("color: #e74c3c; font-weight: 600;")
+        self.connected_lbl.setObjectName("config_connected_lbl")
+        self.connected_lbl.setProperty("connected", False)
 
         form.addRow(QLabel("Poll Interval:"),  self.poll_lbl)
         form.addRow(QLabel("Timeout:"),        self.timeout_lbl)
@@ -172,7 +168,7 @@ class PLCConfigPanel(QWidget):
         try:
             profile: dict = (
                 self._app_state.plc_profile
-                or self._app_state.plc_profile_repo.get_profile()
+                or self._app_state.profile_repo.get_profile()
             )
         except Exception as exc:
             logger.warning("PLCConfigPanel: could not load profile — %s", exc)
@@ -216,7 +212,7 @@ class PLCConfigPanel(QWidget):
         try:
             profile: dict = (
                 self._app_state.plc_profile
-                or self._app_state.plc_profile_repo.get_profile()
+                or self._app_state.profile_repo.get_profile()
             )
         except Exception as exc:
             self._show_test_result(False, f"Cannot read profile: {exc}")
@@ -232,7 +228,9 @@ class PLCConfigPanel(QWidget):
 
         self.btn_test.setEnabled(False)
         self.test_result_lbl.setText("Testing…")
-        self.test_result_lbl.setStyleSheet("color: #d4890a;")
+        self.test_result_lbl.setProperty("status", "testing")
+        self.test_result_lbl.style().unpolish(self.test_result_lbl)
+        self.test_result_lbl.style().polish(self.test_result_lbl)
         self.test_result_lbl.show()
 
         self._tester = _QuickTester(
@@ -258,15 +256,17 @@ class PLCConfigPanel(QWidget):
     # ==================================================================
 
     def _show_test_result(self, success: bool, msg: str) -> None:
-        colour = "#1a6b3a" if success else "#c0392b"
         self.test_result_lbl.setText(msg)
-        self.test_result_lbl.setStyleSheet(f"color: {colour}; font-size: 12px; font-weight: 600;")
+        self.test_result_lbl.setProperty("status", "pass" if success else "fail")
+        self.test_result_lbl.style().unpolish(self.test_result_lbl)
+        self.test_result_lbl.style().polish(self.test_result_lbl)
         self.test_result_lbl.show()
 
     def _set_connected_label(self, connected: bool) -> None:
         if connected:
             self.connected_lbl.setText("● Connected")
-            self.connected_lbl.setStyleSheet("color: #2ecc71; font-weight: 600;")
         else:
             self.connected_lbl.setText("● Disconnected")
-            self.connected_lbl.setStyleSheet("color: #e74c3c; font-weight: 600;")
+        self.connected_lbl.setProperty("connected", connected)
+        self.connected_lbl.style().unpolish(self.connected_lbl)
+        self.connected_lbl.style().polish(self.connected_lbl)

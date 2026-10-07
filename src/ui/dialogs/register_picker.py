@@ -4,9 +4,11 @@ Modal dialog to pick registers from the library.
 """
 from __future__ import annotations
 
-from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QLineEdit, QListWidget, QListWidgetItem, QPushButton)
+from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, 
+                             QListWidget, QListWidgetItem, QPushButton)
 from PyQt6.QtCore import Qt
+
+from src.utils.debounce import DebouncedSignal
 
 
 class RegisterPicker(QDialog):
@@ -18,6 +20,9 @@ class RegisterPicker(QDialog):
         self._all_regs = registers
         self._mapped_ids = already_mapped_ids
 
+        self._search_debounce = DebouncedSignal(150, self)
+        self._search_debounce.triggered.connect(lambda: self._populate(self.search_input.text()))
+
         self._init_ui()
         self._populate("")
 
@@ -26,7 +31,7 @@ class RegisterPicker(QDialog):
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search registers...")
-        self.search_input.textChanged.connect(self._populate)
+        self.search_input.textChanged.connect(lambda: self._search_debounce.emit())
         layout.addWidget(self.search_input)
 
         self.list_widget = QListWidget()

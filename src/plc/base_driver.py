@@ -8,16 +8,26 @@ Design rules (Schema v4.0):
   - All addresses originate from register_library.register_address.
   - Address translation (PLC-native → Modbus protocol) is done inside
     each concrete driver using validators.compute_modbus_address().
-  - read_registers() / write_register() are the ONLY two I/O primitives.
-    Callers decode data types with validators.convert_raw_to_value().
+  - read_registers() / write_register() are the single-address I/O
+    primitives; read_block() / write_block() are the contiguous-range
+    (bulk) primitives built on top of them. Callers decode data types
+    with validators.convert_raw_to_value().
 """
 from __future__ import annotations
 
 import logging
 import threading
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
+
+from src.utils.constants import (
+    MODBUS_MAX_READ_BITS,
+    MODBUS_MAX_READ_REGS,
+    MODBUS_MAX_WRITE_BITS,
+    MODBUS_MAX_WRITE_REGS,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +95,14 @@ class PLCDriver(ABC):
           validators.compute_modbus_address(plc_address, register_type, brand).
         - This file never references specific numeric addresses.
     """
+
+    # Protocol maxima per Modbus request. Block reads/writes are chunked to
+    # these sizes. Subclasses may lower them for devices with stricter
+    # limits (raising them above spec is not valid).
+    MAX_READ_REGS_PER_REQUEST  = MODBUS_MAX_READ_REGS   # FC03/FC04: 125
+    MAX_READ_BITS_PER_REQUEST  = MODBUS_MAX_READ_BITS   # FC01/FC02: 2000
+    MAX_WRITE_REGS_PER_REQUEST = MODBUS_MAX_WRITE_REGS  # FC16: 123
+    MAX_WRITE_BITS_PER_REQUEST = MODBUS_MAX_WRITE_BITS  # FC0F: 1968
 
     def __init__(
         self,
@@ -209,6 +227,30 @@ class PLCDriver(ABC):
         """
         ...
 
+    @abstractmethod
+    def write_block(
+        self,
+        start_address: int,
+        register_type: str,
+        values: list[int],
+    ) -> PLCWriteResult:
+        """
+        Bulk-write a contiguous range in chunked requests.
+
+        Args:
+            start_address: PLC-native address of the first element.
+            register_type: 'HOLDING' (FC16) or 'COIL' (FC0F). Other types
+                           return a failure result.
+            values:        Words 0..65535 (HOLDING) or bits 0/1 (COIL).
+
+        Implementation must:
+            1. Chunk to MAX_WRITE_REGS_PER_REQUEST / MAX_WRITE_BITS_PER_REQUEST.
+            2. Translate each chunk address via compute_modbus_address().
+            3. Call _track_request() per Modbus transaction with measured ms.
+            4. Never raise — on failure report partial-progress in .error.
+        """
+        ...
+
     # ------------------------------------------------------------------
     # Concrete helper — contiguous batch read optimiser
     # ------------------------------------------------------------------
@@ -286,6 +328,84 @@ class PLCDriver(ABC):
         )
 
     # ------------------------------------------------------------------
+    # Concrete helper — contiguous block read (Phase 2: data blocks)
+    # ------------------------------------------------------------------
+
+    def read_block(
+        self,
+        start_address: int,
+        register_type: str,
+        count: int,
+    ) -> PLCReadResult:
+        """
+        Read a contiguous address range in chunked requests — one Modbus
+        transaction per chunk, sized to the protocol maxima (class attrs
+        MAX_READ_*_PER_REQUEST). Every address in
+        [start_address, start_address + count) is read, in order.
+
+        Each chunk delegates to read_registers(), so brand address
+        translation and per-request quality tracking behave exactly as
+        they do for single reads.
+
+        Args:
+            start_address: First PLC-native address of the range.
+            register_type: 'HOLDING', 'COIL', 'DISCRETE', or 'INPUT'.
+            count:         Words (HOLDING/INPUT) or bits (COIL/DISCRETE).
+
+        Returns:
+            PLCReadResult with `count` elements in .values on success.
+            On chunk failure: success=False, any values gathered from
+            earlier chunks, and an error naming the failing chunk.
+            .register_address is the PLC-native start address (same
+            convention as read_batch_by_type).
+        """
+        if count <= 0:
+            return PLCReadResult(
+                success=False,
+                register_address=start_address,
+                count=count,
+                error=f"Invalid block count: {count} (must be > 0)",
+            )
+
+        if register_type in ("COIL", "DISCRETE"):
+            chunk_size = self.MAX_READ_BITS_PER_REQUEST
+        else:
+            chunk_size = self.MAX_READ_REGS_PER_REQUEST
+
+        t0 = time.monotonic()
+        values: list[int] = []
+        for offset in range(0, count, chunk_size):
+            n = min(chunk_size, count - offset)
+            chunk = self.read_registers(start_address + offset, register_type, n)
+            if not chunk.success:
+                elapsed = (time.monotonic() - t0) * 1000.0
+                partial = (
+                    f" ({len(values)} of {count} values read before failure)"
+                    if values else ""
+                )
+                return PLCReadResult(
+                    success=False,
+                    values=values,
+                    register_address=start_address,
+                    count=count,
+                    response_time_ms=elapsed,
+                    error=(
+                        f"Block read failed at {register_type} "
+                        f"{start_address + offset} (+{n}): "
+                        f"{chunk.error}{partial}"
+                    ),
+                )
+            values.extend(chunk.values[:n])
+
+        return PLCReadResult(
+            success=True,
+            values=values,
+            register_address=start_address,
+            count=count,
+            response_time_ms=(time.monotonic() - t0) * 1000.0,
+        )
+
+    # ------------------------------------------------------------------
     # Quality / diagnostics
     # ------------------------------------------------------------------
 
@@ -356,4 +476,3 @@ class PLCDriver(ABC):
         self.slave_id = int(profile.get("slave_id", self.slave_id))
         self.timeout_ms = int(profile.get("timeout_ms", self.timeout_ms))
         # Add additional parameter updates as needed
-        pass

@@ -36,6 +36,8 @@ class ModelMapRepo:
         card_position: int = 0,
         pass_value: int = 1,
         fail_value: int = 2,
+        limit_min: float = 0.0,
+        limit_max: float = 0.0,
     ) -> int:
         """
         Maps a register to a model.
@@ -52,6 +54,8 @@ class ModelMapRepo:
             card_position:     Sorting order on the dashboard.
             pass_value:        Modbus value interpreted as PASS (for RESULT role).
             fail_value:        Modbus value interpreted as FAIL (for RESULT role).
+            limit_min:         Lower spec threshold for MEASURED role (0.0 = unconfigured).
+            limit_max:         Upper spec threshold for MEASURED role (0.0 = unconfigured).
         """
         # 1. Validation
         if role not in ROLES:
@@ -75,14 +79,14 @@ class ModelMapRepo:
             INSERT INTO model_register_map (
                 model_id, register_id, role, display_name, group_name,
                 enabled, bypass, show_in_dashboard, card_position,
-                pass_value, fail_value
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                pass_value, fail_value, limit_min, limit_max
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = (
             model_id, register_id, role, display_name, group_name,
             1 if enabled else 0, 1 if bypass else 0, 
             1 if show_in_dashboard else 0, card_position,
-            pass_value, fail_value
+            pass_value, fail_value, limit_min, limit_max
         )
         
         cursor = self.db.execute(query, params)
@@ -115,9 +119,9 @@ class ModelMapRepo:
         query += " ORDER BY m.card_position ASC, m.id ASC"
         return self.db.fetchall(query, tuple(params))
 
-    def get_dashboard_registers(self, model_id: int) -> list[dict]:
+    def get_dashboard_registers(self, model_id: int, max_cards: int = MAX_DASHBOARD_CARDS) -> list[dict]:
         """
-        Returns up to 12 registers configured for dashboard display.
+        Returns up to *max_cards* registers configured for dashboard display.
         """
         query = """
             SELECT m.*, r.register_address, r.register_type, r.data_type, 
@@ -128,7 +132,7 @@ class ModelMapRepo:
             ORDER BY m.card_position ASC
             LIMIT ?
         """
-        return self.db.fetchall(query, (model_id, MAX_DASHBOARD_CARDS))
+        return self.db.fetchall(query, (model_id, max_cards))
 
     def get_poll_registers(self, model_id: int) -> list[dict]:
         """
@@ -188,11 +192,16 @@ class ModelMapRepo:
             "SELECT * FROM model_register_map WHERE model_id = ?", (source_model_id,)
         )
         count = 0
+        # Only copy the columns that add_mapping() accepts
+        _allowed_keys = {
+            "register_id", "role", "display_name", "group_name",
+            "enabled", "bypass", "show_in_dashboard", "card_position",
+            "pass_value", "fail_value", "limit_min", "limit_max"
+        }
         for m in source_mappings:
             try:
-                # Remove primary key and update model_id
-                data = dict(m)
-                del data["id"]
+                # Filter to only allowed keys
+                data = {k: v for k, v in dict(m).items() if k in _allowed_keys}
                 data["model_id"] = target_model_id
                 
                 # Check if register already exists in target to avoid duplicates
@@ -227,11 +236,14 @@ class ModelMapRepo:
         # Check for dashboard overflow
         db_count = sum(1 for m in mappings if m["show_in_dashboard"])
         if db_count > MAX_DASHBOARD_CARDS:
-            warnings.append(f"Model has {db_count} dashboard cards, but UI only supports {MAX_DASHBOARD_CARDS}. Some will be hidden.")
+            warnings.append(
+                f"Model has {db_count} dashboard cards, but UI only supports {MAX_DASHBOARD_CARDS}. "
+                "Some will be hidden."
+            )
 
         # Check for duplicate positions
         positions = [m["card_position"] for m in mappings if m["show_in_dashboard"]]
         if len(positions) != len(set(positions)):
-             warnings.append("Some dashboard cards have duplicate sequence numbers.")
+            warnings.append("Some dashboard cards have duplicate sequence numbers.")
 
         return warnings

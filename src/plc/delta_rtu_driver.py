@@ -13,7 +13,7 @@ Serial parameter defaults for Delta DVP:
     Stop bits: 1
 
 Address mapping — Delta differs from Mitsubishi for COIL and DISCRETE:
-    M coil n      → coil address    = 2049 + n   (Mitsubishi: 1 + n)
+    M coil n      → coil address    = 2048 + n   (Mitsubishi: 1 + n)
     X discrete n  → discrete addr   = 1024 + n   (Mitsubishi: 0x400 + n)
     D register n  → holding addr    = n           (same as Mitsubishi)
 
@@ -33,7 +33,6 @@ from pymodbus.client import ModbusSerialClient
 
 from .base_driver import PLCDriver
 from .delta_driver import DeltaDriver
-from .mitsubishi_rtu_driver import MitsubishiRTUDriver
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +147,7 @@ class DeltaRTUDriver(DeltaDriver):
                                               self._com_port, retry_delay, attempt + 1, max_retries)
                             if self._client:
                                 try: self._client.close()
-                                except: pass
+                                except Exception: pass
                                 self._client = None
                             time.sleep(retry_delay)
                             continue

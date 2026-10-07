@@ -5,7 +5,6 @@ Main Shell Window managing the navigation stack for a seamless Single Window App
 
 import logging
 from PyQt6.QtWidgets import QMainWindow, QStackedWidget, QVBoxLayout, QWidget
-from PyQt6.QtCore import Qt
 
 from database.db_manager import Database
 from ui.app_state import AppState

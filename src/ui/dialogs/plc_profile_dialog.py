@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QLineEdit, QSpinBox, QComboBox,
     QGroupBox, QPushButton, QDialogButtonBox,
-    QMessageBox, QSizePolicy,
+    QMessageBox,
 )
 from PyQt6.QtCore import Qt, QRegularExpression, QThread, pyqtSignal
 from PyQt6.QtGui import QRegularExpressionValidator
@@ -264,7 +264,7 @@ class PLCProfileDialog(QDialog):
     def _load_profile(self) -> None:
         """Populate all widgets from the stored PLC profile."""
         try:
-            profile: dict = self._app_state.plc_profile_repo.get_profile()
+            profile: dict = self._app_state.profile_repo.get_profile()
         except Exception as exc:
             logger.error("Failed to load PLC profile: %s", exc)
             return
@@ -351,8 +351,8 @@ class PLCProfileDialog(QDialog):
         )
 
         try:
-            self._app_state.plc_profile_repo.update_profile(**kwargs)
-            updated = self._app_state.plc_profile_repo.get_profile()
+            self._app_state.profile_repo.update_profile(**kwargs)
+            updated = self._app_state.profile_repo.get_profile()
             self._app_state.set_plc_profile(updated)
 
             username = (

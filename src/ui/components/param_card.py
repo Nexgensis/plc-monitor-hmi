@@ -8,15 +8,15 @@ from __future__ import annotations
 
 import logging
 from PyQt6.QtWidgets import (QFrame, QVBoxLayout, QHBoxLayout, QLabel, 
-                             QApplication, QWidget)
+                             QApplication, QGraphicsOpacityEffect)
 from PyQt6.QtCore import (Qt, pyqtSignal, QMimeData, QPropertyAnimation, 
-                          QPoint, QSize)
-from PyQt6.QtGui import QDrag, QCursor, QPixmap
+                          QPoint)
+from PyQt6.QtGui import QDrag
 
 from src.logic.pass_fail_evaluator import EvalResult
 from src.utils.constants import (
     RESULT_PASS, RESULT_FAIL, RESULT_PENDING, 
-    RESULT_BYPASS, RESULT_RUNNING
+    RESULT_BYPASS, RESULT_RUNNING, RESULT_NA
 )
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class ParamCard(QFrame):
         
         header.addStretch()
         
-        self.drag_handle = QLabel("⠿")
+        self.drag_handle = QLabel("⋮")
         self.drag_handle.setCursor(Qt.CursorShape.SizeAllCursor)
         self.drag_handle.setObjectName("card_drag_handle")
         self.drag_handle.setVisible(self._can_drag)
@@ -94,7 +94,7 @@ class ParamCard(QFrame):
         self.unit_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.unit_lbl.setObjectName("card_unit_label")
         layout.addWidget(self.unit_lbl)
-        
+
         layout.addStretch()
 
         # 5. Result Badge
@@ -122,7 +122,7 @@ class ParamCard(QFrame):
     def update_result(self, eval_result: EvalResult) -> None:
         """Update card content and visual state."""
         # 1. Update text
-        if eval_result.display_str == "---":
+        if eval_result.display_str == "---" or eval_result.result == RESULT_PENDING:
             self.value_lbl.setText("---")
         else:
             self.value_lbl.setText(eval_result.display_str)
@@ -142,6 +142,7 @@ class ParamCard(QFrame):
             RESULT_PENDING: "result_pending",
             RESULT_BYPASS:  "result_pending",
             RESULT_RUNNING: "result_running",
+            RESULT_NA:      "result_pending",
         }
         text_map = {
             RESULT_PASS:    "● PASS",
@@ -149,6 +150,7 @@ class ParamCard(QFrame):
             RESULT_PENDING: "● PENDING",
             RESULT_BYPASS:  "● BYPASS",
             RESULT_RUNNING: "● RUNNING",
+            RESULT_NA:      "● N/A",
         }
         
         self.result_lbl.setObjectName(obj_map.get(result, "result_pending"))
@@ -175,11 +177,15 @@ class ParamCard(QFrame):
             self._stop_pulse()
 
     def _start_pulse(self) -> None:
-        """Starts a subtle opacity pulse animation."""
+        """Starts a subtle opacity pulse animation on the card content."""
         if hasattr(self, "_pulse_anim"):
             return
             
-        self._pulse_anim = QPropertyAnimation(self, b"windowOpacity")
+        effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(effect)
+        self._pulse_effect = effect
+        
+        self._pulse_anim = QPropertyAnimation(effect, b"opacity")
         self._pulse_anim.setDuration(1000)
         self._pulse_anim.setStartValue(1.0)
         self._pulse_anim.setEndValue(0.6)
@@ -187,11 +193,14 @@ class ParamCard(QFrame):
         self._pulse_anim.start()
 
     def _stop_pulse(self) -> None:
-        """Stops animation and restores opacity."""
+        """Stops animation and restores full opacity."""
         if hasattr(self, "_pulse_anim"):
             self._pulse_anim.stop()
             del self._pulse_anim
-        self.setWindowOpacity(1.0)
+        if hasattr(self, "_pulse_effect"):
+            self._pulse_effect.setOpacity(1.0)
+            del self._pulse_effect
+        self.setGraphicsEffect(None)
 
     def reset(self) -> None:
         """Reset to idle state."""

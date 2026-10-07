@@ -7,6 +7,8 @@ from __future__ import annotations
 import logging
 from typing import Optional, Dict, Any
 
+import bcrypt
+
 from .database import Database
 
 logger = logging.getLogger(__name__)
@@ -26,17 +28,22 @@ class UserRepository:
             "SELECT * FROM users WHERE username = ?", (username.strip(),)
         )
 
-    def authenticate(self, username: str, password_hash: str) -> Optional[Dict[str, Any]]:
-        """
-        Validates credentials. 
-        Note: In a production app, password_hash would be compared using a 
-        secure library like bcrypt or argon2.
-        """
+    def authenticate(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+        """Validates credentials using the stored bcrypt hash."""
         user = self.db.fetchone(
-            "SELECT * FROM users WHERE UPPER(username) = UPPER(?) AND password_hash = ?",
-            (username.strip(), password_hash)
+            "SELECT * FROM users WHERE UPPER(username) = UPPER(?)",
+            (username.strip(),)
         )
-        if user:
+        if not user:
+            return None
+
+        stored_hash = user.get("password_hash") or ""
+        try:
+            password_ok = bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+        except (ValueError, TypeError):
+            password_ok = False
+
+        if password_ok:
             self.db.execute(
                 "UPDATE users SET last_login = datetime('now','utc') WHERE id = ?",
                 (user["id"],)
@@ -74,12 +81,49 @@ class UserRepository:
         return True
 
     def delete_user(self, user_id: int) -> bool:
-        """Removes a user. Cannot delete the last admin."""
+        """Removes a user. Cannot delete the last admin or an account that owns registers."""
         user = self.db.fetchone("SELECT role FROM users WHERE id = ?", (user_id,))
         if user and user["role"] == "ADMIN":
             admin_count = self.db.fetchone("SELECT COUNT(*) as count FROM users WHERE role = 'ADMIN'")
             if admin_count["count"] <= 1:
                 raise ValueError("Cannot delete the last administrator.")
-                
+
+        # schema.sql defines register_library.created_by as ON DELETE CASCADE —
+        # deleting this user would also wipe every register they created and
+        # cascade into model mappings, controls, I/O list, messages, test
+        # results and the write audit log. Block it instead.
+        owned = self.db.fetchone(
+            "SELECT COUNT(*) as count FROM register_library WHERE created_by = ?",
+            (user_id,),
+        )
+        if owned and owned["count"] > 0:
+            raise ValueError(
+                f"Cannot delete this user: they created {owned['count']} register(s). "
+                "Reassign or delete those registers first."
+            )
+
         self.db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        return True
+
+    def change_password(self, user_id: int, current_password: str, new_password: str) -> bool:
+        """
+        Changes a user's password after verifying the current password.
+        Returns True on success, False if the current password is wrong.
+        """
+        user = self.db.fetchone("SELECT * FROM users WHERE id = ?", (user_id,))
+        if not user:
+            return False
+
+        stored_hash = user.get("password_hash") or ""
+        try:
+            if not bcrypt.checkpw(current_password.encode("utf-8"), stored_hash.encode("utf-8")):
+                return False
+        except (ValueError, TypeError):
+            return False
+
+        new_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt(rounds=12)).decode("utf-8")
+        self.db.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (new_hash, user_id),
+        )
         return True

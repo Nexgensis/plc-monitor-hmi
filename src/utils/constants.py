@@ -64,7 +64,7 @@ MITSUBISHI_Y_BASE       = 1280    # Y output coil base (decimal offset of octal 
 MITSUBISHI_X_BASE       = 0x400   # X input discrete base (1024)
 
 DELTA_HOLDING_BASE      = 0       # D0 → holding address 0 (same as Mitsubishi)
-DELTA_COIL_BASE         = 2049    # M0 → coil address 2049
+DELTA_COIL_BASE         = 2048    # M0 → coil protocol address 0x0800
 DELTA_Y_BASE            = 1280    # Y output coil base (same as Mitsubishi)
 DELTA_X_BASE            = 1024    # X input discrete base
 
@@ -138,6 +138,20 @@ ACCESS_READ_ONLY  = "READ_ONLY"   # App only reads this register
 ACCESS_READ_WRITE = "READ_WRITE"  # App may write to this register
 
 # ---------------------------------------------------------------------------
+# Data Blocks — bulk contiguous address ranges (register_blocks table)
+# ---------------------------------------------------------------------------
+# UI/config limits for a single block definition.
+MAX_BLOCK_COUNT_REGS = 1000   # max words in one HOLDING/INPUT block
+MAX_BLOCK_COUNT_BITS = 2000   # max bits in one COIL/DISCRETE block
+
+# Modbus protocol maxima per request — block reads/writes are chunked to
+# these sizes (class-overridable per driver/brand if a device is stricter).
+MODBUS_MAX_READ_REGS  = 125   # FC03/FC04 max holding/input registers
+MODBUS_MAX_READ_BITS  = 2000  # FC01/FC02 max coils/discrete inputs
+MODBUS_MAX_WRITE_REGS = 123   # FC16 max holding registers
+MODBUS_MAX_WRITE_BITS = 1968  # FC0F max coils
+
+# ---------------------------------------------------------------------------
 # Register Roles in model_register_map
 # Defines the functional role of each register for a specific model.
 # ---------------------------------------------------------------------------
@@ -182,6 +196,10 @@ CTRL_TYPE_LABELS: dict[str, str] = {
     CTRL_CUSTOM:        "Custom Write",
 }
 
+# plc_write_log.write_reason for bulk register-block writes (FC16/FC0F).
+# Not a control_registers type — audit-trail reason only.
+REASON_BLOCK_WRITE = "BLOCK_WRITE"
+
 # ---------------------------------------------------------------------------
 # Test Result Values
 # ---------------------------------------------------------------------------
@@ -190,17 +208,31 @@ RESULT_FAIL    = "FAIL"
 RESULT_BYPASS  = "BYPASS"
 RESULT_PENDING = "PENDING"
 RESULT_RUNNING = "RUNNING"
+RESULT_NA      = "N/A"       # Informative/telemetry parameter with no thresholds
+
+# ---------------------------------------------------------------------------
+# Machine State (D21 message register values)
+# ---------------------------------------------------------------------------
+MACHINE_STATE_IDLE      = 0
+MACHINE_STATE_RUNNING   = 99
+MACHINE_STATE_PASS      = 1
+MACHINE_STATE_FAIL      = 2
+MACHINE_STATE_BYPASS    = 3
+MACHINE_STATE_ERROR     = 4
+MACHINE_STATE_WAITING   = 5
+MACHINE_STATE_COMPLETE  = 6
 
 # ---------------------------------------------------------------------------
 # Dashboard Card Layout
 # ---------------------------------------------------------------------------
-MAX_DASHBOARD_CARDS = 12  # Maximum simultaneous cards on test dashboard
+MAX_DASHBOARD_CARDS = 20  # Maximum simultaneous cards on test dashboard
 
 # Thresholds: (min_cards, max_cards) → grid layout config
 CARD_GRID_THRESHOLDS: dict[tuple[int, int], dict] = {
-    (1, 4):  {"cols": 2, "size": "large"},
-    (5, 8):  {"cols": 3, "size": "medium"},
-    (9, 12): {"cols": 4, "size": "small"},
+    (1, 4):   {"cols": 2, "size": "large"},
+    (5, 8):   {"cols": 3, "size": "medium"},
+    (9, 16):  {"cols": 4, "size": "small"},
+    (17, 30): {"cols": 5, "size": "small"},
 }
 
 # ---------------------------------------------------------------------------
@@ -231,34 +263,41 @@ WRITE_MANUAL        = "MANUAL"        # Manual control panel write
 THEME_DARK  = "dark"
 THEME_LIGHT = "light"
 
+# ---------------------------------------------------------------------------
+# Design Tokens — single source of truth for Python-side colors.
+# MUST stay in sync with assets/themes/dark.qss and assets/themes/light.qss.
+# Palette: deep-teal sidebar (#1a3c40 family) + cyan accent, teal-tinted
+# neutrals, semantic green/red/amber for pass/fail/warn.
+# ---------------------------------------------------------------------------
+
 # Dark theme palette (industrial dark UI)
-DARK_BG_PRIMARY     = "#0a0e1a"
-DARK_BG_SECONDARY   = "#0f1824"
-DARK_BG_CARD        = "#111827"
-DARK_BORDER         = "#1e2d4a"
-DARK_TEXT_PRIMARY   = "#e8f0fa"
-DARK_TEXT_MUTED     = "#5a7a9a"
-DARK_ACCENT         = "#3b82f6"
+DARK_BG_PRIMARY     = "#0a171a"   # window / content background
+DARK_BG_SECONDARY   = "#0f2024"   # cards, top bar, inputs
+DARK_BG_CARD        = "#0f2024"
+DARK_BORDER         = "#1a3c40"   # teal border / selection / primary button
+DARK_TEXT_PRIMARY   = "#e8f7fa"
+DARK_TEXT_MUTED     = "#5a8f9a"
+DARK_ACCENT         = "#22d3ee"   # cyan accent (active states, focus)
 DARK_PASS           = "#22c55e"
 DARK_FAIL           = "#ef4444"
 DARK_RUNNING        = "#f59e0b"
 DARK_WARN           = "#f59e0b"
-DARK_SIDEBAR_BG     = "#070b14"
-DARK_SIDEBAR_ACTIVE = "#1e2d4a"
+DARK_SIDEBAR_BG     = "#11292c"   # deep teal sidebar
+DARK_SIDEBAR_ACTIVE = "#1a3c40"
 
 # Light theme palette
-LIGHT_BG_PRIMARY    = "#f0f4f8"
+LIGHT_BG_PRIMARY    = "#f4f7f6"   # window / content background
 LIGHT_BG_SECONDARY  = "#ffffff"
 LIGHT_BG_CARD       = "#ffffff"
-LIGHT_BORDER        = "#d8e4f0"
-LIGHT_TEXT_PRIMARY  = "#1e2d4a"
-LIGHT_TEXT_MUTED    = "#6a7a9a"
-LIGHT_ACCENT        = "#1e2d4a"
-LIGHT_PASS          = "#1a6b3a"
-LIGHT_FAIL          = "#c0392b"
-LIGHT_RUNNING       = "#d4890a"
-LIGHT_WARN          = "#d4890a"
-LIGHT_SIDEBAR_BG    = "#1e2d4a"
+LIGHT_BORDER        = "#e2eef0"
+LIGHT_TEXT_PRIMARY  = "#1e363b"
+LIGHT_TEXT_MUTED    = "#64848b"
+LIGHT_ACCENT        = "#0e7490"   # cyan-700 accent (contrast-safe on white)
+LIGHT_PASS          = "#16a34a"
+LIGHT_FAIL          = "#dc2626"
+LIGHT_RUNNING       = "#d97706"
+LIGHT_WARN          = "#d97706"
+LIGHT_SIDEBAR_BG    = "#1a3c40"   # deep teal sidebar (same as plan)
 LIGHT_SIDEBAR_ACTIVE = "rgba(255,255,255,0.15)"
 
 # ---------------------------------------------------------------------------
@@ -272,15 +311,23 @@ PAGE_IO_LIST  = "io_list"
 PAGE_REPORTS  = "reports"
 PAGE_SETTINGS = "settings"
 
-# Each entry: (page_id, icon, label, allowed_roles)
+# Each entry: (page_id, icon_name, label, allowed_roles)
+# icon_name is a key into src.utils.icons.get_icon()
 NAV_ITEMS: list[tuple[str, str, str, list[str]]] = [
-    (PAGE_MODEL,    "🏠", "MODEL",   [ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_OPERATOR]),
-    (PAGE_TEST,     "📊", "TEST",    [ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_OPERATOR]),
-    (PAGE_MANUAL,   "🔧", "MANUAL",  [ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_OPERATOR]),
-    (PAGE_CONFIG,   "⚙️",  "CONFIG",  [ROLE_ADMIN]),
-    (PAGE_IO_LIST,  "📋", "I/O",     [ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_OPERATOR]),
-    (PAGE_REPORTS,  "📈", "REPORTS", [ROLE_ADMIN, ROLE_SUPERVISOR]),
-    (PAGE_SETTINGS, "👤", "SETTINGS", [ROLE_ADMIN]),
+    (PAGE_MODEL,    "model",    "Model Selection",  [ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_OPERATOR]),
+    (PAGE_TEST,     "test",     "Live Testing",     [ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_OPERATOR]),
+    (PAGE_MANUAL,   "manual",   "Manual Control",   [ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_OPERATOR]),
+    (PAGE_CONFIG,   "config",   "PLC Mapping",      [ROLE_ADMIN]),
+    (PAGE_IO_LIST,  "io",       "I/O Diagnostics",  [ROLE_ADMIN, ROLE_SUPERVISOR, ROLE_OPERATOR]),
+    (PAGE_REPORTS,  "reports",  "Reports & Analytics", [ROLE_ADMIN, ROLE_SUPERVISOR]),
+    (PAGE_SETTINGS, "settings", "System Settings",   [ROLE_ADMIN]),
+]
+
+# Sidebar section grouping: (section_title, [page_ids in order])
+NAV_SECTIONS: list[tuple[str, list[str]]] = [
+    ("MONITORING",        [PAGE_MODEL, PAGE_TEST, PAGE_IO_LIST]),
+    ("CONTROL & CONFIG",  [PAGE_MANUAL, PAGE_CONFIG, PAGE_REPORTS]),
+    ("SYSTEM",            [PAGE_SETTINGS]),
 ]
 
 # ---------------------------------------------------------------------------
@@ -290,7 +337,7 @@ DEFAULT_POLL_MS       = 500   # Default PLC polling interval
 DEFAULT_TIMEOUT_MS    = 3000  # Default Modbus request timeout
 DEFAULT_RECONNECT_MS  = 3000  # Default delay between reconnect attempts
 WRITE_VERIFY_DELAY_MS = 150   # Delay before reading back a written value
-IO_LIST_REFRESH_MS    = 2000  # I/O list page refresh rate
+IO_LIST_REFRESH_MS    = 250  # I/O list page refresh rate
 MAX_WRITE_RETRIES     = 3     # Maximum write retry attempts
 
 # ---------------------------------------------------------------------------
@@ -329,7 +376,7 @@ Y_COIL_MAP_MITSUBISHI = {
 # Test states (D21 value)
 STATE_IDLE     = 0   
 STATE_RUNNING  = 99  
-STATE_COMPLETE = 0   
+STATE_COMPLETE = 6   
 
 STATE_LABELS = {
     STATE_IDLE: "IDLE",
@@ -354,3 +401,20 @@ D21_SEVERITY = {
 PLC_RESULT_PASS   = 1
 PLC_RESULT_FAIL   = 2
 PLC_RESULT_BYPASS = 3
+
+# ---------------------------------------------------------------------------
+# Default PLC Register Addresses (used by PLCProfileDialog)
+# These are sensible defaults; actual values are stored in the database.
+# ---------------------------------------------------------------------------
+DEFAULT_STATE_REGISTER           = 21   # D21 — machine state register
+DEFAULT_START_COIL               = 100  # M100 — test start trigger coil
+DEFAULT_OVERALL_RESULT_REGISTER  = 22   # D22 — overall PASS/FAIL result
+DEFAULT_OK_COUNT_REGISTER        = 23   # D23 — OK (pass) counter
+DEFAULT_NG_COUNT_REGISTER        = 24   # D24 — NG (fail) counter
+
+# ---------------------------------------------------------------------------
+# UI Color Constants (used by ManualGrid and other components)
+# ---------------------------------------------------------------------------
+COLOR_NAVY  = "#1e2d4a"   # Dark navy for headers and button backgrounds
+COLOR_WHITE = "#e8f0fa"   # Off-white text on dark backgrounds
+COLOR_AMBER = "#f59e0b"   # Amber for flash/active indicators

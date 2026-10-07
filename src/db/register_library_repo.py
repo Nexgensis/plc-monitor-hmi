@@ -6,7 +6,7 @@ PLC registers known to the application.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from .database import Database
 from src.utils.constants import REG_TYPES, DATA_TYPES
@@ -167,10 +167,10 @@ class RegisterLibraryRepo:
             kwargs["name"] = new_name
 
         if "register_type" in kwargs and kwargs["register_type"] not in REG_TYPES:
-             raise ValueError("Invalid register type.")
+            raise ValueError("Invalid register type.")
 
         if "data_type" in kwargs and kwargs["data_type"] not in DATA_TYPES:
-             raise ValueError("Invalid data type.")
+            raise ValueError("Invalid data type.")
 
         # 2. Build dynamic update query
         fields = []
@@ -224,10 +224,14 @@ class RegisterLibraryRepo:
         message_register_id references will cascade delete and are not checked here.
         We only check for active configuration usage that would prevent deletion.
         """
-        row_maps = self.db.fetchone("SELECT COUNT(*) as cnt FROM model_register_map WHERE register_id = ?", (register_id,))
+        row_maps = self.db.fetchone(
+            "SELECT COUNT(*) as cnt FROM model_register_map WHERE register_id = ?", (register_id,)
+        )
         maps = row_maps["cnt"] if row_maps else 0
         
-        row_ctrls = self.db.fetchone("SELECT COUNT(*) as cnt FROM control_registers WHERE register_id = ?", (register_id,))
+        row_ctrls = self.db.fetchone(
+            "SELECT COUNT(*) as cnt FROM control_registers WHERE register_id = ?", (register_id,)
+        )
         ctrls = row_ctrls["cnt"] if row_ctrls else 0
         
         row_io = self.db.fetchone("SELECT COUNT(*) as cnt FROM io_list_config WHERE register_id = ?", (register_id,))

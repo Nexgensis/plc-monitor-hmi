@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import (
     QFrame, QLabel, QPushButton,
     QListWidget, QListWidgetItem,
     QTabWidget, QWidget, QMessageBox,
-    QSizePolicy,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QCloseEvent
@@ -435,7 +434,6 @@ class SettingsWindow(QDialog):
             QMessageBox.critical(self, "Error", "Could not load model configuration.")
             return
 
-        model_dict = config.get("model", config)
         operator_id = (
             self._app_state.current_user.get("id", 0)
             if self._app_state.current_user else 0
@@ -470,7 +468,7 @@ class SettingsWindow(QDialog):
         logger.info("SettingsWindow: push success model='%s'", model_name)
 
     def _on_push_failed(self, model_name: str, error: str) -> None:
-        self.push_status_lbl.setText(f"✗  Push failed")
+        self.push_status_lbl.setText("✗  Push failed")
         self.push_status_lbl.setStyleSheet("color: #c0392b; font-size: 11px;")
         QMessageBox.critical(
             self,

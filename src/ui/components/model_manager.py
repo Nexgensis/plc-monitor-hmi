@@ -26,7 +26,6 @@ class ModelManager(QFrame):
         self._model_repo = ModelRepository(self._db)
         
         self.setObjectName("card")
-        self.setStyleSheet("QFrame#card { background-color: #f8f9fc; border: 1px solid #d0d8e8; border-radius: 4px; }")
         
         self._current_selected_id = None
         self._setup_ui()
@@ -43,7 +42,9 @@ class ModelManager(QFrame):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(10)
         
-        left_layout.addWidget(QLabel("Existing Models", styleSheet="font-weight: bold; font-size: 14px;"))
+        existing_models_lbl = QLabel("Existing Models")
+        existing_models_lbl.setObjectName("section_title")
+        left_layout.addWidget(existing_models_lbl)
         
         self.table = QTableWidget()
         self.table.setColumnCount(2)
@@ -54,7 +55,7 @@ class ModelManager(QFrame):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self.table.setStyleSheet("selection-background-color: #c8e6c9; selection-color: black;")
+        self.table.setObjectName("model_list_table")
         
         self.table.cellDoubleClicked.connect(self._on_table_item_activated)
         self.table.itemSelectionChanged.connect(self._on_selection_changed)
@@ -62,7 +63,7 @@ class ModelManager(QFrame):
         left_layout.addWidget(self.table)
         
         lbl_hint = QLabel("Select a model from the list to edit or delete it.")
-        lbl_hint.setStyleSheet("color: gray; font-style: italic; font-size: 11px;")
+        lbl_hint.setObjectName("hint_label")
         left_layout.addWidget(lbl_hint)
         
         main_layout.addWidget(left_panel, stretch=2)
@@ -75,7 +76,9 @@ class ModelManager(QFrame):
         right_layout.setContentsMargins(20, 20, 20, 20)
         right_layout.setSpacing(12)
         
-        right_layout.addWidget(QLabel("Model Details", styleSheet="font-weight: bold; font-size: 14px; color: #1e2d4a;"))
+        model_details_lbl = QLabel("Model Details")
+        model_details_lbl.setObjectName("form_section_title")
+        right_layout.addWidget(model_details_lbl)
         self.edit_name = QLineEdit()
         self.edit_desc = QLineEdit()
         self.edit_no = QLineEdit()
@@ -112,7 +115,7 @@ class ModelManager(QFrame):
         # Add-New Trigger
         divider = QFrame()
         divider.setFrameShape(QFrame.Shape.HLine)
-        divider.setStyleSheet("color: #ecf0f1;")
+        divider.setObjectName("form_divider")
         right_layout.addWidget(divider)
         
         self.btn_add = QPushButton("+ Add New Model")
@@ -120,7 +123,7 @@ class ModelManager(QFrame):
         right_layout.addWidget(self.btn_add)
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #2ecc71; font-weight: bold;")
+        self.lbl_status.setObjectName("temp_status")
         self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_status.hide()
         right_layout.addWidget(self.lbl_status)
@@ -187,7 +190,9 @@ class ModelManager(QFrame):
         if dialog.exec():
             data = dialog.result_data
             # Assuming Database repo implementation supports update logically matching previous signatures bounds 
-            self._model_repo.update_model(self._current_selected_id, data["name"], data["description"], data["model_number"])
+            self._model_repo.update_model(
+                self._current_selected_id, data["name"], data["description"], data["model_number"]
+            )
             self.refresh_model_list()
             self.model_changed.emit()
 

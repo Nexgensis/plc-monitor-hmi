@@ -41,11 +41,14 @@ class PLCDriverFactory:
     _lock = threading.Lock()
 
     @staticmethod
-    def create(profile: dict) -> PLCDriver:
+    def create(profile: dict, cached: bool = True) -> PLCDriver:
         """
         Instantiate or retrieve the correct PLCDriver subclass.
         Reuses instances for the same connection (host:port or COM port)
         to prevent 'Access is denied' serial port errors.
+
+        Pass cached=False for throwaway drivers (e.g. the connection
+        tester) that must never touch or tear down the live connection.
         """
         brand    = str(profile.get("brand",    PLC_BRAND_MITSUBISHI)).lower().strip()
         protocol = str(profile.get("protocol", PLC_PROTOCOL_TCP)).upper().strip()
@@ -64,7 +67,7 @@ class PLCDriverFactory:
 
         with PLCDriverFactory._lock:
             # If we have a driver for this port already, update it and return it
-            if cache_key in PLCDriverFactory._cache:
+            if cached and cache_key in PLCDriverFactory._cache:
                 driver = PLCDriverFactory._cache[cache_key]
                 logger.info("Reusing existing driver for %s", cache_key)
                 
@@ -78,7 +81,8 @@ class PLCDriverFactory:
 
             # Otherwise, create new
             driver = PLCDriverFactory._create_new(profile)
-            PLCDriverFactory._cache[cache_key] = driver
+            if cached:
+                PLCDriverFactory._cache[cache_key] = driver
             return driver
 
     @staticmethod
@@ -125,4 +129,29 @@ class PLCDriverFactory:
 
     # Alias for backward compatibility
     create_from_profile = create
+
+    @staticmethod
+    def invalidate(profile: dict = None) -> None:
+        """
+        Remove cached driver(s) so the next create() builds fresh.
+        If profile is given, only that specific cache entry is removed.
+        If None, the entire cache is cleared.
+        """
+        with PLCDriverFactory._lock:
+            if profile is None:
+                PLCDriverFactory._cache.clear()
+                logger.info("PLCDriverFactory: Cache cleared")
+            else:
+                brand = str(profile.get("brand", "")).lower().strip()
+                protocol = str(profile.get("protocol", "")).upper().strip()
+                if protocol == "TCP":
+                    host = str(profile.get("host", "")).strip()
+                    port = int(profile.get("port", 502))
+                    key = f"{brand}:{protocol}:{host}:{port}"
+                else:
+                    com_port = str(profile.get("com_port", "")).strip()
+                    key = f"{brand}:{protocol}:{com_port}"
+                if key in PLCDriverFactory._cache:
+                    del PLCDriverFactory._cache[key]
+                    logger.info("PLCDriverFactory: Removed cached driver for %s", key)
 

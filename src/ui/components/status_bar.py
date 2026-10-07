@@ -6,8 +6,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSpacerItem, QSizePolicy
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel
 from src.utils.constants import DB_PATH
 
 logger = logging.getLogger(__name__)
@@ -18,8 +17,8 @@ class StatusBar(QFrame):
         super().__init__()
         self.app_state = app_state
         self.setObjectName("status_bar")
+        self.setAccessibleName("Status bar")
         self.setFixedHeight(28)
-        self.setStyleSheet("background-color: #070b14; border-top: 1px solid #1e2d4a;")
 
         self._init_ui()
 
@@ -30,7 +29,9 @@ class StatusBar(QFrame):
 
         # Left: PLC Message
         self.message_lbl = QLabel("[READY]")
-        self.message_lbl.setStyleSheet("font-family: monospace; font-size: 11px; color: #22c55e;")
+        self.message_lbl.setObjectName("status_message_lbl")
+        self.message_lbl.setAccessibleName("PLC status message")
+        self.message_lbl.setToolTip("Shows the latest PLC status message")
         layout.addWidget(self.message_lbl)
 
         layout.addStretch()
@@ -40,32 +41,19 @@ class StatusBar(QFrame):
         if self.app_state and self.app_state.plc_profile:
             poll_ms = self.app_state.plc_profile.get("poll_interval_ms", 500)
 
-        self.db_lbl = QLabel(f"DB: {DB_PATH} ✓  |  Poll: {poll_ms}ms")
-        self.db_lbl.setStyleSheet("font-size: 10px; color: #5a7a9a;")
+        self.db_lbl = QLabel(f"DB: {DB_PATH} | Poll: {poll_ms}ms")
+        self.db_lbl.setObjectName("status_db_lbl")
+        self.db_lbl.setAccessibleName("Database and poll status")
+        self.db_lbl.setToolTip("Database file path and current polling interval")
         layout.addWidget(self.db_lbl)
 
     def show_message(self, val: int, text: str, color: str) -> None:
-        """
-        If val==0 or not text: show "[READY]" green.
-        Else: "[HH:MM:SS] {text}" in mapped color.
-        """
         if val == 0 or not text:
             self.message_lbl.setText("[READY]")
-            self.message_lbl.setStyleSheet("font-family: monospace; font-size: 11px; color: #22c55e;")
             return
 
         ts = datetime.now().strftime("%H:%M:%S")
         self.message_lbl.setText(f"[{ts}] {text}")
 
-        color_map = {
-            "green": "#22c55e",
-            "red": "#ef4444",
-            "yellow": "#f59e0b",
-            "amber": "#f59e0b",
-            "white": "#e8f0fa"
-        }
-        hex_color = color_map.get(color.lower(), "#e8f0fa")
-        self.message_lbl.setStyleSheet(f"font-family: monospace; font-size: 11px; color: {hex_color};")
-
     def update_poll_info(self, poll_ms: int) -> None:
-        self.db_lbl.setText(f"DB: {DB_PATH} ✓  |  Poll: {poll_ms}ms")
+        self.db_lbl.setText(f"DB: {DB_PATH} | Poll: {poll_ms}ms")

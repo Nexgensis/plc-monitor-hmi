@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (
     QProgressBar, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QIcon
 
 from src.ui.app_state import AppState
 from src.plc.model_push_worker import ModelPushWorker
@@ -125,7 +124,9 @@ class LoginWindow(QMainWindow):
         self.bottom_bar.setObjectName("status_bar_frame")
         self.bottom_bar.setFixedHeight(36)
         # Deep navy background for high contrast with white status text
-        self.bottom_bar.setStyleSheet("background-color: #0f1624; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;")
+        self.bottom_bar.setStyleSheet(
+            "background-color: #0f1624; border-bottom-left-radius: 8px; border-bottom-right-radius: 8px;"
+        )
         bottom_layout = QHBoxLayout(self.bottom_bar)
         bottom_layout.setContentsMargins(15, 0, 15, 0)
         

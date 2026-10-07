@@ -19,7 +19,6 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem,
     QGroupBox, QAbstractItemView, QHeaderView,
     QFrame, QFileDialog, QMessageBox,
-    QSizePolicy,
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
@@ -63,15 +62,12 @@ class PLCBlockEditor(QWidget):
 
     def _build_warning_banner(self) -> QFrame:
         frame = QFrame()
-        frame.setStyleSheet(
-            "QFrame { background: #fff3cd; border: 1px solid #ffc107;"
-            " border-radius: 4px; }"
-        )
+        frame.setObjectName("block_editor_warning")
         layout = QHBoxLayout(frame)
         layout.setContentsMargins(10, 8, 10, 8)
 
         icon = QLabel("⚠")
-        icon.setStyleSheet("font-size: 20px; color: #856404; background: transparent; border: none;")
+        icon.setObjectName("block_editor_warning_icon")
         icon.setFixedWidth(28)
 
         text = QLabel(
@@ -82,9 +78,7 @@ class PLCBlockEditor(QWidget):
             "Example: H25=37, H26=38, H24=36."
         )
         text.setWordWrap(True)
-        text.setStyleSheet(
-            "color: #856404; font-size: 12px; background: transparent; border: none;"
-        )
+        text.setObjectName("block_editor_warning_text")
 
         layout.addWidget(icon)
         layout.addWidget(text, stretch=1)
@@ -107,7 +101,7 @@ class PLCBlockEditor(QWidget):
         self.start_spin.setFixedWidth(160)
 
         self.block_size_lbl = QLabel("0 registers")
-        self.block_size_lbl.setStyleSheet("color: #5a6a8a;")
+        self.block_size_lbl.setObjectName("config_detail_label")
 
         form.addRow(QLabel("Start Register (D):"), self.start_spin)
         form.addRow(QLabel("Block Size:"), self.block_size_lbl)
@@ -187,9 +181,7 @@ class PLCBlockEditor(QWidget):
 
         # Last pushed values display
         self.current_block_lbl = QLabel("Last pushed: (none)")
-        self.current_block_lbl.setStyleSheet(
-            "color: #5a6a8a; font-size: 12px; font-style: italic;"
-        )
+        self.current_block_lbl.setObjectName("config_detail_italic")
         self.current_block_lbl.setWordWrap(True)
         layout.addWidget(self.current_block_lbl)
 
@@ -214,13 +206,11 @@ class PLCBlockEditor(QWidget):
         bar = QHBoxLayout()
 
         self.btn_save_db = QPushButton("Save to DB")
-        self.btn_save_db.setStyleSheet(
-            "background: #1e2d4a; color: white; min-width: 110px;"
-        )
+        self.btn_save_db.setObjectName("btn_primary")
         self.btn_save_db.clicked.connect(self._on_save_to_db)
 
         self.status_lbl = QLabel()
-        self.status_lbl.setStyleSheet("font-size: 12px; font-weight: 600;")
+        self.status_lbl.setObjectName("config_status_lbl")
 
         bar.addWidget(self.btn_save_db)
         bar.addStretch()
@@ -474,10 +464,9 @@ class PLCBlockEditor(QWidget):
             f"PLC readback: {plc_vals}  "
             f"{'✓ Matches DB' if match else '✗ Differs from DB'}"
         )
-        colour = "#1a6b3a" if match else "#c0392b"
-        self.current_block_lbl.setStyleSheet(
-            f"color: {colour}; font-size: 12px;"
-        )
+        self.current_block_lbl.setProperty("status", "pass" if match else "fail")
+        self.current_block_lbl.style().unpolish(self.current_block_lbl)
+        self.current_block_lbl.style().polish(self.current_block_lbl)
         logger.info(
             "PLCBlockEditor: readback D%d…D%d = %s, match=%s",
             start, start + n - 1, plc_vals, match,
@@ -512,11 +501,10 @@ class PLCBlockEditor(QWidget):
     # ==================================================================
 
     def _show_status(self, msg: str, success: bool) -> None:
-        colour = "#1a6b3a" if success else "#c0392b"
         self.status_lbl.setText(msg)
-        self.status_lbl.setStyleSheet(
-            f"color: {colour}; font-size: 12px; font-weight: 600;"
-        )
+        self.status_lbl.setProperty("status", "pass" if success else "fail")
+        self.status_lbl.style().unpolish(self.status_lbl)
+        self.status_lbl.style().polish(self.status_lbl)
         def _clear():
             try:
                 if self.status_lbl:

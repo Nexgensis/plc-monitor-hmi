@@ -21,7 +21,6 @@ import logging
 import time
 
 from pymodbus.client import ModbusTcpClient
-from pymodbus.exceptions import ModbusException
 
 from .base_driver import PLCDriver, PLCReadResult, PLCWriteResult
 from src.utils.validators import compute_modbus_address
@@ -320,6 +319,156 @@ class MitsubishiDriver(PLCDriver):
                     value_written=value,
                 )
 
+
+    # ------------------------------------------------------------------
+    # Bulk block write (FC16 / FC0F) — Phase 2: data blocks
+    # ------------------------------------------------------------------
+
+    def write_block(
+        self,
+        start_address: int,
+        register_type: str,
+        values: list[int],
+    ) -> PLCWriteResult:
+        """
+        Bulk-write a contiguous range using FC16 (HOLDING) or FC0F (COIL).
+
+        Values are written in chunks of at most
+        MAX_WRITE_REGS_PER_REQUEST / MAX_WRITE_BITS_PER_REQUEST words/bits.
+        Address translation uses self.brand, so Mitsubishi, Delta, and both
+        RTU variants share this single implementation.
+
+        Args:
+            start_address: PLC-native address of the first element.
+            register_type: 'HOLDING' or 'COIL' (other types fail).
+            values:        Words 0..65535 (HOLDING) or bits 0/1 (COIL).
+
+        Returns:
+            PLCWriteResult. On failure, .error reports how many elements
+            were written before the failure (partial write), and
+            .value_written always carries the full intended list.
+            Never raises.
+        """
+        if not self._client:
+            return PLCWriteResult(
+                success=False,
+                error="Not connected",
+                register_address=start_address,
+                value_written=values,
+            )
+        if not values:
+            return PLCWriteResult(
+                success=False,
+                error="Empty value list",
+                register_address=start_address,
+            )
+
+        # --- Normalize and validate values -----------------------------
+        norm: list[int] = []
+        if register_type == "HOLDING":
+            for i, v in enumerate(values):
+                try:
+                    iv = int(v)
+                except (TypeError, ValueError):
+                    return PLCWriteResult(
+                        success=False,
+                        register_address=start_address,
+                        value_written=values,
+                        error=f"value[{i}] is not an integer: {v!r}",
+                    )
+                if not (0 <= iv <= 65535):
+                    return PLCWriteResult(
+                        success=False,
+                        register_address=start_address,
+                        value_written=values,
+                        error=f"value[{i}]={iv} out of range 0-65535",
+                    )
+                norm.append(iv)
+            chunk_max = self.MAX_WRITE_REGS_PER_REQUEST
+        elif register_type == "COIL":
+            for i, v in enumerate(values):
+                try:
+                    iv = int(v)
+                except (TypeError, ValueError):
+                    return PLCWriteResult(
+                        success=False,
+                        register_address=start_address,
+                        value_written=values,
+                        error=f"value[{i}] is not an integer: {v!r}",
+                    )
+                if iv not in (0, 1):
+                    return PLCWriteResult(
+                        success=False,
+                        register_address=start_address,
+                        value_written=values,
+                        error=f"value[{i}]={iv} invalid for COIL (expected 0 or 1)",
+                    )
+                norm.append(iv)
+            chunk_max = self.MAX_WRITE_BITS_PER_REQUEST
+        else:
+            return PLCWriteResult(
+                success=False,
+                register_address=start_address,
+                value_written=values,
+                error=f"register_type {register_type!r} is not writable",
+            )
+
+        base_addr = compute_modbus_address(start_address, register_type, self.brand)
+        written = 0
+
+        for offset in range(0, len(norm), chunk_max):
+            chunk = norm[offset:offset + chunk_max]
+            modbus_addr = compute_modbus_address(
+                start_address + offset, register_type, self.brand
+            )
+            tc = time.monotonic()
+            try:
+                with self._lock:
+                    if register_type == "HOLDING":
+                        resp = self._client.write_registers(
+                            address=modbus_addr,
+                            values=list(chunk),
+                            slave=self._slave_id,
+                        )
+                    else:  # COIL
+                        resp = self._client.write_coils(
+                            address=modbus_addr,
+                            values=[bool(v) for v in chunk],
+                            slave=self._slave_id,
+                        )
+                success = not resp.isError()
+                err = "" if success else str(resp)
+            except Exception as exc:
+                success = False
+                err = str(exc)
+            chunk_ms = (time.monotonic() - tc) * 1000.0
+            self._track_request(success, chunk_ms)
+
+            if not success:
+                self._connected = False
+                self.logger.error(
+                    "write_block %s %d (+%d of %d): %s",
+                    register_type, start_address + offset,
+                    len(chunk), len(norm), err,
+                )
+                return PLCWriteResult(
+                    success=False,
+                    register_address=modbus_addr,
+                    value_written=norm,
+                    error=(
+                        f"Block write failed at {register_type} "
+                        f"{start_address + offset} (+{len(chunk)}): {err} "
+                        f"({written} of {len(norm)} values written before failure)"
+                    ),
+                )
+            written += len(chunk)
+
+        self._connected = True
+        return PLCWriteResult(
+            success=True,
+            register_address=base_addr,
+            value_written=norm,
+        )
 
     # ------------------------------------------------------------------
     # Pulse write (momentary control signal)

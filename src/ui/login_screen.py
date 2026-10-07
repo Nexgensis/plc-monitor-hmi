@@ -4,9 +4,7 @@ Main entry point for authentication and high-level routing.
 Features a dual-panel design: Authentication (left) and Navigation (right).
 """
 
-import sys
 from datetime import datetime
-from typing import Optional
 
 from PyQt6.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QHBoxLayout, QLabel,
@@ -14,13 +12,12 @@ from PyQt6.QtWidgets import (
     QSpacerItem, QSizePolicy, QApplication
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
 
-from database.db_manager import Database
-from database.user_repo import UserRepository
-from database.model_repo import ModelRepository
-from ui.app_state import AppState
-from core.constants import APP_NAME, APP_VERSION, ROLE_ADMIN, ROLE_OPERATOR, ROLE_SUPERVISOR
+from src.db.database import Database
+from src.db.user_repo import UserRepository
+from src.db.model_repo import ModelRepository
+from src.ui.app_state import AppState
+from src.utils.constants import APP_NAME, APP_VERSION, ROLE_ADMIN, ROLE_OPERATOR, ROLE_SUPERVISOR
 
 
 class LoginWindow(QWidget):
@@ -314,7 +311,9 @@ class LoginWindow(QWidget):
         if self._router:
             self._router.show_dashboard()
         else:
-            QMessageBox.information(self, "Notice", "Main Dashboard Screen is not yet fully implemented or Router missing.")
+            QMessageBox.information(
+                self, "Notice", "Main Dashboard Screen is not yet fully implemented or Router missing."
+            )
 
     def _on_manual_test_clicked(self) -> None:
         model_id = self.model_combo.currentData()

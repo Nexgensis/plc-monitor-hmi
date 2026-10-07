@@ -85,7 +85,7 @@ def seed_database(db: Database) -> None:
         ("theme",               "dark"),
         ("first_run",           "1"),    # 1 = show setup wizard
         ("poll_interval_ms",    "500"),
-        ("max_dashboard_cards", "12"),
+        ("max_dashboard_cards", "20"),
     ]
     db.executemany(
         "INSERT OR IGNORE INTO app_config (key, value) VALUES (?, ?)",

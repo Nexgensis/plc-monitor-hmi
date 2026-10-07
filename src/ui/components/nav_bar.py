@@ -30,27 +30,27 @@ class NavBar(QFrame):
         self.app_state = app_state
 
         self.setFixedHeight(44)
-        self.setStyleSheet("background-color: #1e2d4a;")
+        self.setObjectName("nav_bar")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(15, 0, 15, 0)
 
         # LEFT
         self.app_name_lbl = QLabel("PLC Monitor")
-        self.app_name_lbl.setStyleSheet("color: white; font-size: 13px; font-weight: bold;")
+        self.app_name_lbl.setObjectName("nav_bar_title")
         layout.addWidget(self.app_name_lbl)
 
         # CENTER
         layout.addStretch()
         self.model_name_lbl = QLabel("")
-        self.model_name_lbl.setStyleSheet("color: white; font-size: 15px; font-weight: bold;")
+        self.model_name_lbl.setObjectName("nav_bar_model")
         self.model_name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.model_name_lbl)
         layout.addStretch()
 
         # RIGHT
         self.plc_status_lbl = QLabel("● PLC: Disconnected")
-        self.plc_status_lbl.setStyleSheet("color: #e74c3c; font-size: 12px;")
+        self.plc_status_lbl.setObjectName("nav_bar_plc_status")
         layout.addWidget(self.plc_status_lbl)
 
         layout.addSpacing(15)
@@ -60,41 +60,32 @@ class NavBar(QFrame):
         role = user.get("role", "Unknown") if user else "Unknown"
         
         self.user_lbl = QLabel(f"👤 {username} ({role})")
-        self.user_lbl.setStyleSheet("color: white; font-size: 12px;")
+        self.user_lbl.setObjectName("nav_bar_user")
         layout.addWidget(self.user_lbl)
 
         layout.addSpacing(15)
 
         self.home_btn = QPushButton("⌂ Home")
         self.home_btn.setFlat(True)
-        self.home_btn.setStyleSheet("""
-            QPushButton {
-                color: white; 
-                background: transparent; 
-                border: none;
-                font-size: 13px;
-                padding: 4px 8px;
-            }
-            QPushButton:hover {
-                background: rgba(255, 255, 255, 0.1);
-            }
-        """)
+        self.home_btn.setObjectName("nav_bar_home_btn")
         self.home_btn.clicked.connect(self._on_home_clicked)
         layout.addWidget(self.home_btn)
 
         # Initial updates
         self.update_plc_status(self.app_state.is_plc_connected)
         if self.app_state.current_model:
-            model_name = self.app_state.current_model.get("model", {}).get("name", "")
+            model_name = self.app_state.current_model.get("name", "")
             self.update_model_name(model_name)
 
     def update_plc_status(self, connected: bool) -> None:
         if connected:
             self.plc_status_lbl.setText("● PLC: Connected")
-            self.plc_status_lbl.setStyleSheet("color: #2ecc71; font-size: 12px;")
+            self.plc_status_lbl.setProperty("connected", True)
         else:
             self.plc_status_lbl.setText("● PLC: Disconnected")
-            self.plc_status_lbl.setStyleSheet("color: #e74c3c; font-size: 12px;")
+            self.plc_status_lbl.setProperty("connected", False)
+        self.plc_status_lbl.style().unpolish(self.plc_status_lbl)
+        self.plc_status_lbl.style().polish(self.plc_status_lbl)
 
     def update_model_name(self, name: str) -> None:
         self.model_name_lbl.setText(name)

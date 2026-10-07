@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSpacerItem, QSizePolicy
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel
+from PyQt6.QtCore import QTimer
 from src.utils.constants import APP_NAME, APP_VERSION
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,7 @@ class TopBar(QFrame):
         super().__init__()
         self.app_state = app_state
         self.setObjectName("top_bar")
+        self.setAccessibleName("Application top bar")
         self.setFixedHeight(44)
 
         self._init_ui()
@@ -34,81 +35,133 @@ class TopBar(QFrame):
 
         # Left: App Name
         self.app_name_lbl = QLabel(f"{APP_NAME} v{APP_VERSION}")
-        self.app_name_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #3b82f6;")
+        self.app_name_lbl.setObjectName("app_name_lbl")
+        self.app_name_lbl.setAccessibleName("Application name")
         layout.addWidget(self.app_name_lbl)
 
         # Center: Page Title
         self.title_lbl = QLabel("HOME")
-        self.title_lbl.setStyleSheet("font-weight: 600; font-size: 14px; text-transform: uppercase;")
+        self.title_lbl.setObjectName("top_bar_title")
+        self.title_lbl.setAccessibleName("Current page title")
         layout.addWidget(self.title_lbl)
 
         layout.addStretch()
 
-        # PLC Status
-        self.plc_status_lbl = QLabel("● Not Configured")
-        self.plc_status_lbl.setStyleSheet("font-weight: 600; color: #f59e0b;") # Amber default
-        layout.addWidget(self.plc_status_lbl)
+        # PLC Status Pill
+        self.plc_pill = QFrame()
+        self.plc_pill.setObjectName("plc_status_pill")
+        pill_lay = QHBoxLayout(self.plc_pill)
+        pill_lay.setContentsMargins(10, 3, 10, 3)
+        pill_lay.setSpacing(6)
+
+        self.plc_status_dot = QLabel("●")
+        self.plc_status_dot.setObjectName("plc_status_dot")
+        self.plc_status_dot.setAccessibleName("PLC connection indicator")
+        pill_lay.addWidget(self.plc_status_dot)
+
+        self.plc_status_lbl = QLabel("Not Configured")
+        self.plc_status_lbl.setObjectName("plc_status_lbl")
+        self.plc_status_lbl.setAccessibleName("PLC connection status")
+        self.plc_status_lbl.setToolTip("Shows current PLC connection state")
+        pill_lay.addWidget(self.plc_status_lbl)
+        self.plc_pill.setMaximumWidth(220)
+        layout.addWidget(self.plc_pill)
 
         # Quality Indicator
-        self.quality_lbl = QLabel("⏱ --ms")
-        self.quality_lbl.setStyleSheet("font-family: monospace; color: #5a7a9a;")
+        self.quality_dot = QLabel("●")
+        self.quality_dot.setObjectName("quality_dot")
+        self.quality_dot.setAccessibleName("PLC connection quality indicator")
+        self.quality_dot.setFixedWidth(14)
+        layout.addWidget(self.quality_dot)
+
+        self.quality_lbl = QLabel("--ms")
+        self.quality_lbl.setObjectName("quality_lbl")
+        self.quality_lbl.setAccessibleName("PLC response time")
+        self.quality_lbl.setToolTip("Average PLC communication response time in milliseconds")
         layout.addWidget(self.quality_lbl)
 
-        # Cycle Time (Placeholder if needed)
+        # Cycle Time - only visible on test page (M-01)
         self.cycle_lbl = QLabel("Cycle: --s")
-        self.cycle_lbl.setStyleSheet("font-family: monospace; color: #5a7a9a;")
+        self.cycle_lbl.setObjectName("cycle_lbl")
+        self.cycle_lbl.setAccessibleName("Cycle time")
+        self.cycle_lbl.setToolTip("Current test cycle duration")
+        self.cycle_lbl.setVisible(False)
         layout.addWidget(self.cycle_lbl)
 
+        # User Avatar
+        self.user_avatar = QLabel("G")
+        self.user_avatar.setObjectName("user_avatar")
+        self.user_avatar.setFixedSize(28, 28)
+        self.user_avatar.setAccessibleName("User avatar")
+        self.user_avatar.setToolTip("User initials")
+        layout.addWidget(self.user_avatar)
+
         # User
-        self.user_lbl = QLabel("👤 Guest")
-        self.user_lbl.setStyleSheet("font-weight: bold;")
+        self.user_lbl = QLabel("Guest")
+        self.user_lbl.setObjectName("user_lbl")
+        self.user_lbl.setAccessibleName("Logged in user")
+        self.user_lbl.setToolTip("Current user and role")
         layout.addWidget(self.user_lbl)
 
         # Clock
         self.clock_lbl = QLabel("00:00:00")
-        self.clock_lbl.setStyleSheet("font-family: monospace; font-size: 13px;")
+        self.clock_lbl.setObjectName("clock_lbl")
+        self.clock_lbl.setAccessibleName("Current time")
         layout.addWidget(self.clock_lbl)
 
     def update_page_title(self, title: str) -> None:
         self.title_lbl.setText(title.replace("_", " ").upper())
+        # Show cycle label only on test page
+        is_test = title.lower() == "test"
+        self.cycle_lbl.setVisible(is_test)
 
     def update_plc_status(self, connected: bool, msg: str = "") -> None:
-        """
-        Updates the PLC status label with color coding.
-        """
+        online = bool(connected)
+        self.plc_pill.setProperty("online", online)
         if not self.app_state.is_plc_configured:
-            self.plc_status_lbl.setText("● Not Configured")
-            self.plc_status_lbl.setStyleSheet("font-weight: 600; color: #f59e0b;")
+            self.plc_status_lbl.setText("Not Configured")
+            self.plc_status_lbl.setToolTip("No PLC connection configured")
+            self.plc_status_lbl.setProperty("connected", None)
         elif connected:
             profile = self.app_state.plc_profile or {}
             host = profile.get("host", "0.0.0.0")
             port = profile.get("port", 502)
-            self.plc_status_lbl.setText(f"● {host}:{port}")
-            self.plc_status_lbl.setStyleSheet("font-weight: 600; color: #22c55e;")
+            status_text = f"● ONLINE  {host}:{port}"
+            self.plc_status_lbl.setText(status_text)
+            self.plc_status_lbl.setToolTip(f"Connected to PLC at {host}:{port}")
+            self.plc_status_lbl.setProperty("connected", True)
         else:
-            txt = f"● Disconnected {msg}".strip()
+            txt = f"● OFFLINE  {msg}".strip()
             self.plc_status_lbl.setText(txt)
-            self.plc_status_lbl.setStyleSheet("font-weight: 600; color: #ef4444;")
+            self.plc_status_lbl.setToolTip(txt)
+            self.plc_status_lbl.setProperty("connected", False)
+
+        self.plc_pill.style().unpolish(self.plc_pill)
+        self.plc_pill.style().polish(self.plc_pill)
+        self.plc_status_lbl.style().unpolish(self.plc_status_lbl)
+        self.plc_status_lbl.style().polish(self.plc_status_lbl)
 
     def update_quality(self, quality: dict) -> None:
-        """
-        Shows response time: "⏱ {avg_ms}ms"
-        Changes color: <100ms green, <500ms amber, >500ms red
-        """
-        avg_ms = quality.get("avg_response_ms", 0)
-        self.quality_lbl.setText(f"⏱ {int(avg_ms)}ms")
+        avg_ms = quality.get("avg_response_ms") or 0
+        self.quality_lbl.setText(f"{int(avg_ms)}ms")
 
         if avg_ms < 100:
-            color = "#22c55e" # green
+            level = "good"
         elif avg_ms < 500:
-            color = "#f59e0b" # amber
+            level = "medium"
         else:
-            color = "#ef4444" # red
-        
-        self.quality_lbl.setStyleSheet(f"font-family: monospace; color: {color};")
+            level = "poor"
+        self.quality_dot.setProperty("quality", level)
+        self.quality_dot.style().unpolish(self.quality_dot)
+        self.quality_dot.style().polish(self.quality_dot)
 
     def update_user(self, user: dict) -> None:
-        self.user_lbl.setText(f"👤 {user.get('username', 'User')} ({user.get('role', 'OPERATOR')})")
+        username = user.get('username', 'User')
+        role = user.get('role', 'OPERATOR')
+        self.user_lbl.setText(f"{username} ({role})")
+
+        initials = username[:2].upper()
+        self.user_avatar.setText(initials)
 
     def _update_clock(self) -> None:
         self.clock_lbl.setText(datetime.now().strftime("%H:%M:%S"))

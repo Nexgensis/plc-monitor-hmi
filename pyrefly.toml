@@ -2,4 +2,4 @@
 # Tell Pyrefly where to find Python source packages
 python_version = "3.12"
 # Set search_path to include the directory containing the 'src' package
-search_path = ["."]
+search_path = ["src"]

@@ -7,24 +7,25 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QFrame, QGridLayout, 
-                             QMessageBox, QApplication)
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
+                             QMessageBox)
+from PyQt6.QtCore import Qt
 
 from src.ui.app_state import AppState
 from src.logic.pass_fail_evaluator import PassFailEvaluator, EvalResult
+from src.logic.session_controller import SessionController
 from src.ui.components.param_card import ParamCard
 from src.ui.dialogs.confirm_dialog import ConfirmDialog
 from src.plc.data_model import RegisterReading
 from src.utils.constants import (
     RESULT_PASS, RESULT_FAIL, RESULT_PENDING, RESULT_BYPASS, RESULT_RUNNING,
-    MAX_DASHBOARD_CARDS, ROLE_COUNTER,
-    CTRL_START_TEST, CTRL_STOP_TEST, CTRL_RESET_BATCH, CTRL_RESET_COUNTER,
-    CTRL_ACK, CTRL_CUSTOM
+    RESULT_NA,
+    ROLE_COUNTER, CTRL_START_TEST,
+    CTRL_STOP_TEST, CTRL_RESET_BATCH, CTRL_RESET_COUNTER, CTRL_ACK,
+    CTRL_CUSTOM
 )
 
 logger = logging.getLogger(__name__)
@@ -42,9 +43,10 @@ class TestPage(QWidget):
         self._cards: Dict[int, ParamCard] = {}
         self._card_order: List[int] = []
         self._evaluator: Optional[PassFailEvaluator] = None
+        self._session_ctrl: Optional[SessionController] = None
         self._is_running = False
-        self._session_id: Optional[int] = None
         self._last_test_start: Optional[datetime] = None
+        self._signals_connected = False
         
         self.setAcceptDrops(True)
         self._init_ui()
@@ -70,6 +72,13 @@ class TestPage(QWidget):
         banner_layout.addWidget(self.model_name_lbl)
         
         banner_layout.addStretch()
+
+        self.btn_fullscreen = QPushButton("⛶")
+        self.btn_fullscreen.setObjectName("btn_secondary")
+        self.btn_fullscreen.setFixedSize(34, 34)
+        self.btn_fullscreen.setToolTip("Toggle fullscreen mode")
+        self.btn_fullscreen.clicked.connect(self._toggle_fullscreen)
+        banner_layout.addWidget(self.btn_fullscreen)
 
         self.btn_start = QPushButton("▶ START TEST")
         self.btn_start.setObjectName("btn_success")
@@ -106,7 +115,8 @@ class TestPage(QWidget):
 
         # --- RIGHT COLUMN: Status & Counters ---
         right_widget = QWidget()
-        right_widget.setFixedWidth(200)
+        right_widget.setMinimumWidth(220)
+        right_widget.setMaximumWidth(260)
         right_col = QVBoxLayout(right_widget)
         right_col.setSpacing(10)
         right_col.setContentsMargins(0, 0, 0, 0)
@@ -117,20 +127,20 @@ class TestPage(QWidget):
         res_frame.setFixedHeight(100)
         res_frame.setObjectName("overall_result_card")
         res_layout = QVBoxLayout(res_frame)
-        
+
         lbl_title = QLabel("OVERALL RESULT")
         lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_title.setObjectName("small_header_label")
         res_layout.addWidget(lbl_title)
-        
+
         self.overall_lbl = QLabel("● PENDING")
         self.overall_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.overall_lbl.setObjectName("result_pending")
         res_layout.addWidget(self.overall_lbl)
-        
+
         right_col.addWidget(res_frame)
 
-        # 2. Counters Area
+        # 2. Dynamic Counters Area (for any ROLE_COUNTER registers)
         self.counters_area = QVBoxLayout()
         self.counters_area.setSpacing(8)
         right_col.addLayout(self.counters_area)
@@ -141,17 +151,17 @@ class TestPage(QWidget):
         time_frame.setFixedHeight(60)
         time_frame.setObjectName("cycle_time_card")
         time_layout = QVBoxLayout(time_frame)
-        
+
         lbl_cycle = QLabel("CYCLE TIME")
         lbl_cycle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_cycle.setObjectName("small_header_label")
         time_layout.addWidget(lbl_cycle)
-        
+
         self.cycle_lbl = QLabel("0.0 s")
         self.cycle_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.cycle_lbl.setObjectName("cycle_time_value")
         time_layout.addWidget(self.cycle_lbl)
-        
+
         right_col.addWidget(time_frame)
 
     def on_page_shown(self) -> None:
@@ -159,16 +169,34 @@ class TestPage(QWidget):
         if self.app_state.current_model_id:
             self.load_model(self.app_state.current_model_id)
         
-        # Connect real-time signals
+        # Connect real-time signals (disconnect first to avoid duplicates)
         cm = self.app_state.connection_manager
         if cm:
+            if self._signals_connected:
+                try:
+                    cm.readings_updated.disconnect(self.on_readings_updated)
+                    cm.message_changed.disconnect(self.on_message_changed)
+                except (RuntimeError, TypeError):
+                    pass
             try:
                 cm.readings_updated.connect(self.on_readings_updated)
                 cm.message_changed.connect(self.on_message_changed)
+                self._signals_connected = True
             except RuntimeError:
-                pass # Already connected
+                pass
         
         self.on_plc_state_changed(self.app_state.is_plc_connected)
+
+    def _toggle_fullscreen(self) -> None:
+        """Toggle between fullscreen and normal window mode."""
+        if self.window().isFullScreen():
+            self.window().showNormal()
+            self.btn_fullscreen.setText("⛶")
+            self.btn_fullscreen.setToolTip("Enter fullscreen mode (F11)")
+        else:
+            self.window().showFullScreen()
+            self.btn_fullscreen.setText("✕")
+            self.btn_fullscreen.setToolTip("Exit fullscreen mode (Esc)")
 
     def load_model(self, model_id: int) -> None:
         """Initialize dashboard for the specific model."""
@@ -184,6 +212,14 @@ class TestPage(QWidget):
         
         # 1. Setup Evaluator
         self._evaluator = PassFailEvaluator(regs)
+        
+        # 1.1 Setup Session Controller
+        self._session_ctrl = SessionController(self.app_state, self._evaluator)
+        self._session_ctrl.overall_result.connect(self._on_session_result)
+        self._session_ctrl.counts_updated.connect(self._on_counts_updated)
+        self._session_ctrl.error_occurred.connect(
+            lambda msg: logger.error(f"SessionController: {msg}")
+        )
         
         # 2. Build Card Grid
         self._build_card_grid(regs)
@@ -201,6 +237,7 @@ class TestPage(QWidget):
             item = self.cards_grid.takeAt(0)
             w = item.widget()
             if w and w != self.empty_lbl:
+                w.hide()
                 w.deleteLater()
         self._cards.clear()
         self._card_order.clear()
@@ -211,11 +248,13 @@ class TestPage(QWidget):
         # Determine grid density
         if n <= 4:   cols, mode = 2, "large"
         elif n <= 8: cols, mode = 3, "medium"
-        else:        cols, mode = 4, "small"
+        elif n <= 16: cols, mode = 4, "small"
+        else:        cols, mode = 5, "small"
 
         can_drag = self.app_state.is_admin()
+        max_cards = self.app_state.config_repo.get_max_dashboard_cards() if self.app_state.config_repo else 20
 
-        for i, reg in enumerate(regs[:MAX_DASHBOARD_CARDS]):
+        for i, reg in enumerate(regs[:max_cards]):
             rid = reg["register_id"]
             card = ParamCard(
                 register_id  = rid,
@@ -238,6 +277,7 @@ class TestPage(QWidget):
         while self.ctrl_btn_row.count():
             item = self.ctrl_btn_row.takeAt(0)
             if item.widget():
+                item.widget().hide()
                 item.widget().deleteLater()
         
         controls = self.app_state.control_repo.get_all_controls()
@@ -248,24 +288,27 @@ class TestPage(QWidget):
             if ctrl["control_type"] in action_types:
                 btn = QPushButton(ctrl["name"])
                 btn.setObjectName("btn_secondary")
-                btn.setFixedHeight(32)
+                btn.setFixedHeight(34)
                 btn.clicked.connect(lambda _, c=ctrl: self._execute_control(c))
                 self.ctrl_btn_row.addWidget(btn)
         
-        # Also check for STOP_TEST to show in banner
+        # Check for STOP_TEST to know if it's configured at all
         stop_ctrl = self.app_state.control_repo.get_control_by_type(CTRL_STOP_TEST)
-        self.btn_stop.setVisible(bool(stop_ctrl))
+        self._has_stop_ctrl = bool(stop_ctrl)
+        # Visibility managed by cycle events (_on_cycle_start/_on_cycle_end)
+        self.btn_stop.setVisible(False)
 
     def _load_counters(self) -> None:
         """Build counter widgets from model mapping."""
         while self.counters_area.count():
             item = self.counters_area.takeAt(0)
             if item.widget():
+                item.widget().hide()
                 item.widget().deleteLater()
         
         dashboard_regs = self.app_state.dashboard_registers
         counters = [r for r in dashboard_regs if r.get("role") == ROLE_COUNTER]
-        
+
         if not counters:
             lbl = QLabel("No counters configured.")
             lbl.setObjectName("no_counters_label")
@@ -277,13 +320,13 @@ class TestPage(QWidget):
             frame.setObjectName("counter_card")
             c_layout = QVBoxLayout(frame)
             c_layout.setSpacing(0)
-            
+
             val_lbl = QLabel("0")
             val_lbl.setObjectName(f"counter_val_{c['register_id']}")
             val_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             val_lbl.setProperty("type", "counter_value")
             c_layout.addWidget(val_lbl)
-            
+
             name_lbl = QLabel(c["display_name"] or c["name"])
             name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             name_lbl.setObjectName("counter_name_label")
@@ -300,6 +343,10 @@ class TestPage(QWidget):
         # 1. Evaluate results
         eval_results = self._evaluator.evaluate_all(readings, self._is_running)
         
+        # 1.1 Feed readings to SessionController for DB recording
+        if self._session_ctrl:
+            self._session_ctrl.on_readings_update(readings)
+        
         # 2. Update cards
         for res in eval_results:
             card = self._cards.get(res.register_id)
@@ -309,7 +356,7 @@ class TestPage(QWidget):
         # 3. Update overall status
         self._update_overall_status(eval_results)
         
-        # 4. Update counters
+        # 4. Update dynamic counter labels (ROLE_COUNTER cards)
         for reg_id, reading in readings.items():
             lbl = self.findChild(QLabel, f"counter_val_{reg_id}")
             if lbl:
@@ -327,33 +374,65 @@ class TestPage(QWidget):
         """
         was_running = self._is_running
         
-        # We consider the machine "Running" if the message value is > 1
-        # (0=IDLE/READY, 1=PASS/COMPLETED, others=Error or Sequence)
-        # Note: This logic can be moved to MessageRegisterRepo config later.
-        self._is_running = (val > 1)
+        # Running only when D21 == 99 (the MACHINE_STATE_RUNNING constant).
+        # Previously val > 1 incorrectly treated FAIL(2) and COMPLETE(6) as running.
+        from src.utils.constants import MACHINE_STATE_RUNNING
+        self._is_running = (val == MACHINE_STATE_RUNNING)
         
         if not was_running and self._is_running:
             # Cycle Started
             self._on_cycle_start()
         elif was_running and not self._is_running:
             # Cycle Stopped/Finished
-            self._on_cycle_end()
+            self._on_cycle_end(val)
 
     def _on_cycle_start(self) -> None:
         logger.info("Test cycle start detected via PLC message register")
         self._last_test_start = datetime.now()
         self.btn_start.setEnabled(False)
+        # Show STOP button if configured
+        if getattr(self, "_has_stop_ctrl", False):
+            self.btn_stop.setVisible(True)
         # Reset visual state
         for card in self._cards.values():
             card.reset()
         
-        # Open Session in DB (future implementation)
-        # self._session_id = self.app_state.session_repo.open_session(...)
+        # Open Session in DB
+        if self._session_ctrl:
+            self._session_ctrl.on_test_started()
 
-    def _on_cycle_end(self) -> None:
+    def _on_cycle_end(self, machine_state: Optional[int] = None) -> None:
         logger.info("Test cycle end detected")
         self.btn_start.setEnabled(True)
-        # Close Session and save results (future implementation)
+        # Hide STOP button
+        self.btn_stop.setVisible(False)
+        # Close Session and save results
+        if self._session_ctrl:
+            self._session_ctrl.on_test_completed(machine_state)
+
+    def _on_session_result(self, overall: str) -> None:
+        """Handle overall result from SessionController after cycle ends."""
+        logger.info(f"Session result: {overall}")
+
+    def _on_counts_updated(self, ok: int, ng: int, batch: int) -> None:
+        """Update dynamic counter cards from SessionController cumulative counts."""
+        # Map cumulative counts onto the dynamic ROLE_COUNTER cards by name.
+        regs = getattr(self.app_state, "dashboard_registers", []) or []
+        for reg in regs:
+            if reg.get("role") != ROLE_COUNTER:
+                continue
+            name = (reg.get("display_name") or reg.get("name") or "").lower()
+            if "ok" in name:
+                value = ok
+            elif "ng" in name:
+                value = ng
+            elif "batch" in name:
+                value = batch
+            else:
+                continue
+            lbl = self.findChild(QLabel, f"counter_val_{reg['register_id']}")
+            if lbl:
+                lbl.setText(str(value))
 
     def on_plc_state_changed(self, connected: bool) -> None:
         """Updates banner styling based on connection status."""
@@ -368,7 +447,7 @@ class TestPage(QWidget):
             overall = RESULT_RUNNING
         else:
             # Only consider non-bypass results for overall PASS/FAIL
-            active = [r for r in results if r.result not in (RESULT_BYPASS, RESULT_PENDING)]
+            active = [r for r in results if r.result not in (RESULT_BYPASS, RESULT_PENDING, RESULT_NA)]
             if not active:
                 overall = RESULT_PENDING
             elif any(r.result == RESULT_FAIL for r in active):
@@ -380,6 +459,13 @@ class TestPage(QWidget):
 
         self.overall_lbl.setText(f"● {overall}")
         self.overall_lbl.setObjectName(f"result_{overall.lower()}")
+        
+        # Update overall result card styling via status property
+        res_frame = self.overall_lbl.parent()
+        if res_frame:
+            res_frame.setProperty("status", overall.lower())
+            res_frame.style().unpolish(res_frame)
+            res_frame.style().polish(res_frame)
         
         # Force Style refresh
         self.overall_lbl.style().unpolish(self.overall_lbl)
@@ -406,7 +492,9 @@ class TestPage(QWidget):
                 return
         
         if self.app_state.write_manager:
-            self.app_state.write_manager.execute_control(control, self.app_state.current_user["id"])
+            user_id = self.app_state.current_user["id"] if self.app_state.current_user else None
+            if user_id:
+                self.app_state.write_manager.execute_control(control, user_id)
 
     # --- Drag & Drop ---
 

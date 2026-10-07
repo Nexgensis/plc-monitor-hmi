@@ -26,7 +26,7 @@ import logging
 
 from pymodbus.client import ModbusSerialClient
 
-from .base_driver import PLCDriver, PLCReadResult, PLCWriteResult
+from .base_driver import PLCDriver
 from .mitsubishi_driver import MitsubishiDriver
 
 logger = logging.getLogger(__name__)
@@ -139,7 +139,7 @@ class MitsubishiRTUDriver(MitsubishiDriver):
                                               self._com_port, retry_delay, attempt + 1, max_retries)
                             if self._client:
                                 try: self._client.close()
-                                except: pass
+                                except Exception: pass
                                 self._client = None
                             time.sleep(retry_delay)
                             continue
