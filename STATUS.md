@@ -181,6 +181,15 @@
 - **Stage 4 deferred (as chosen):** `ConnectionManager.comm_error` and `PLCWriteManager` write-result signals left untouched pending D1/D2 product decisions
 - **Test trajectory:** 362 → **344 passed / 0 failed** (−18 legacy tests, all deliberate; 0 collection errors); flake8 src 0; screenshot luminance **identical** to Phase 1 baseline per page (zero visual regression)
 
+### Session 17 — Cleanup Stage 4 + Config F7
+**Status:** ✅ Complete (all gates green; cleanup plan now fully executed)
+
+- **D1 (`comm_error`):** verified already wired — `main_window.py` connects it to a throttled error toast (1 per 5 s); plan's "zero listeners" premise was stale. Nothing to do
+- **D2 (write-result signals):** audit found `block_write_*`/`plc_busy`/`verify_failed`/`write_log_updated` all live (block dialog, I/O page, config audit list), but `write_success`/`write_failed` had **zero listeners** — control writes were silent on TEST page. Wired both to MainWindow toasts (`_on_write_success`/`_on_write_failed`); manual page's misleading immediate "Write Success" box reworded to "Write Request Sent" (it fires on dispatch, not completion — box call retained per tests)
+- **F7:** removed the fake "Quick Setup Templates" buttons + `_load_template` simulation stub from the Export/Import tab — no template data ever existed
+- **Tests:** +3 (`TestWriteResultWiring`: signal→handler connection, success/failure toast) → **347 passed / 0 failed**, flake8 src 0, screenshot luminance identical to baseline
+- **Commits:** `a63c6ee` (Stage 4), `caa9b4d` (F7)
+
 ---
 
 ## Feature Checklist
