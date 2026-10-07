@@ -169,6 +169,18 @@
 - **Parity verification:** selector-set diff NONE, font-declaration diff NONE, font mismatches NONE across both themes (was: 1 selector + 5 font asymmetries)
 - **Gates:** pytest **362 passed / 0 failed** (98s), flake8 src 0, compile OK; 14 `after_phase2_*` screenshots generated — luminance within 0.1 of Phase 1 baseline per page (no palette regression), breadcrumb strips visually verified clean in both themes
 
+### Session 16 — Dead-Code Cleanup Plan Execution (Stages 1–3, 5)
+**Status:** ✅ Complete (all gates green; Stage 4 deferred by decision)
+
+- **Decisions applied:** D3 delete `migrations/*.sql` (migrations run inline in `database.py`); D4 Option A (dropped `seed_database` eager re-export; tests already import `src.db.seed` directly); D5 delete `skeleton.py` + `SpinnerOverlay` (`Spinner` itself is live via login_overlay); D6 delete stale `PLCMonitor.spec`; D7 delete the 9 zero-test visual/manual scripts; **D8 declined** (venv stays tracked); D9 retire push-model-to-PLC with the legacy island (feature was non-functional — called removed APIs)
+- **Commit `8b22314`** — landed accumulated Phases 0–2 work first (920 files, precondition of the plan)
+- **Stage 1 (`cccc4e7`):** 41 files / **−7,131 lines** — legacy UI island (app_window, login_*, settings_window, manual_test_*), 5 stubs, 12 dead components, 5 legacy dialogs, `config_manager`, `model_push_worker`, and their coupled tests (`test_login_ui`, `test_settings_window`, `test_login_visual`, `test_pass_fail` + 7 zero-test scripts). Repaired `test_main_window`'s `model_push_worker` patch → `test_model_selection_completes_when_disconnected`; found + removed missed orphan `src/ui/dialogs/password_utility.py`
+- **Stage 2 (`5d1e551`):** deleted unused `parameter_repo.py` (zero refs — test_db's "parameters" tests target a different live feature), removed seed re-export from `src/db/__init__.py`, deleted 3 dead `migrations/*.sql`
+- **Stage 3:** collapsed — stale test repairs pre-dated this session (suite was already green); verified 344-test collection with no dead-target references; the two former collection-error files are gone (gate no longer needs `--ignore` flags)
+- **Stage 5 (`a46d8f0`):** −193/+18 — 6 dead `validators` functions + `icons.get_stroke_body` (`format_value` verified live, kept), 5 no-op config_page handlers + removed-form comments, orphaned `COLOR_NAVY/WHITE/AMBER`, unused `app_icon.png` (753 KB), `PLCMonitor.spec`, `plc_monitor_config.json`; `.gitignore` fixed for `reports_output/`; README Configuration section rewritten (config.json → DB-backed) + project tree corrected; `pyrightconfig.json` consolidated into `pyproject [tool.pyright]`; `description.md` marked historical
+- **Stage 4 deferred (as chosen):** `ConnectionManager.comm_error` and `PLCWriteManager` write-result signals left untouched pending D1/D2 product decisions
+- **Test trajectory:** 362 → **344 passed / 0 failed** (−18 legacy tests, all deliberate; 0 collection errors); flake8 src 0; screenshot luminance **identical** to Phase 1 baseline per page (zero visual regression)
+
 ---
 
 ## Feature Checklist
