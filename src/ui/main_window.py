@@ -270,6 +270,10 @@ class MainWindow(QMainWindow):
             conn_mgr.message_changed.connect(self.status_bar.show_message)
             conn_mgr.quality_updated.connect(self.top_bar.update_quality)
             conn_mgr.comm_error.connect(self._on_plc_comm_error)
+
+            # Control-write outcomes (async — result arrives from the write task)
+            write_mgr.write_success.connect(self._on_write_success)
+            write_mgr.write_failed.connect(self._on_write_failed)
             
             conn_mgr.start()
             logger.info("PLC connection background thread started")
@@ -304,6 +308,16 @@ class MainWindow(QMainWindow):
         if now - getattr(self, "_last_comm_error_ts", 0.0) >= 5.0:
             self._last_comm_error_ts = now
             self.toast.error(message)
+
+    def _on_write_success(self, name: str, address: int, value: object) -> None:
+        """Async control-write result: success feedback for TEST/MANUAL pages."""
+        logger.info("PLC write OK: %s (addr=%s value=%s)", name, address, value)
+        self.toast.success(f"Write OK — {name}: {value}")
+
+    def _on_write_failed(self, name: str, address: int, error: str) -> None:
+        """Async control-write result: failure feedback for TEST/MANUAL pages."""
+        logger.warning("PLC write failed: %s (addr=%s): %s", name, address, error)
+        self.toast.error(f"Write failed — {name}: {error}")
 
     def _init_shortcuts(self) -> None:
         """Initialize keyboard shortcuts for page navigation and test controls."""

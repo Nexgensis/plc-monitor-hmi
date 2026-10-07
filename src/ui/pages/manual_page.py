@@ -273,7 +273,10 @@ class ManualPage(QWidget):
             logger.info("Manual page executing control %s", control["name"])
             try:
                 self.app_state.write_manager.execute_control(control, user_id)
-                QMessageBox.information(self, "Write Success", f"Control '{control['name']}' executed successfully.")
+                QMessageBox.information(
+                    self, "Write Request Sent",
+                    f"Control '{control['name']}' dispatched — the result will appear as a notification.",
+                )
             except Exception as e:
                 logger.error("Manual write failed: %s", e)
                 QMessageBox.critical(self, "Write Failed", f"Failed to execute '{control['name']}':\n{e}")

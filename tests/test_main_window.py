@@ -304,3 +304,36 @@ class TestStatusBar:
         qtbot.addWidget(window)
         window.status_bar.show_message(1, "", "red")
         assert "[READY]" in window.status_bar.message_lbl.text()
+
+
+class TestWriteResultWiring:
+    """Cleanup Stage 4 (D2): async control-write outcomes surface as toasts."""
+
+    def test_write_signals_connected_on_start(self, qtbot, state):
+        window = MainWindow(state)
+        qtbot.addWidget(window)
+        fake_conn = MagicMock()
+        fake_write = MagicMock()
+        with patch("src.ui.main_window.ConnectionManager", return_value=fake_conn), \
+             patch("src.ui.main_window.PLCWriteManager", return_value=fake_write), \
+             patch("src.ui.main_window.PLCDriverFactory.create", return_value=MagicMock()):
+            window._start_plc_connection()
+        fake_write.write_success.connect.assert_any_call(window._on_write_success)
+        fake_write.write_failed.connect.assert_any_call(window._on_write_failed)
+        assert state.write_manager is fake_write
+
+    def test_write_success_handler_toasts(self, qtbot, state):
+        window = MainWindow(state)
+        qtbot.addWidget(window)
+        with patch.object(window.toast, "success") as ok:
+            window._on_write_success("START_TEST", 100, 1)
+        ok.assert_called_once()
+        assert "START_TEST" in ok.call_args[0][0]
+
+    def test_write_failed_handler_toasts(self, qtbot, state):
+        window = MainWindow(state)
+        qtbot.addWidget(window)
+        with patch.object(window.toast, "error") as err:
+            window._on_write_failed("START_TEST", 100, "timeout")
+        err.assert_called_once()
+        assert "timeout" in err.call_args[0][0]
