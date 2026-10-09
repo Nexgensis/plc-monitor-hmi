@@ -190,6 +190,14 @@
 - **Tests:** +3 (`TestWriteResultWiring`: signal→handler connection, success/failure toast) → **347 passed / 0 failed**, flake8 src 0, screenshot luminance identical to baseline
 - **Commits:** `a63c6ee` (Stage 4), `caa9b4d` (F7)
 
+### Session 18 — Handoff Context Document
+**Status:** ✅ Complete
+
+- Created **`HANDOFF.md`** (repo root) — point-in-time handoff snapshot: current git/suite state, architecture map (incl. deleted components that must not be reintroduced), verification gates, project conventions, local artifacts, candidate backlog, key docs. `STATUS.md` remains the source of truth for history
+- **Gates re-run for the snapshot:** pytest **347 passed / 0 failed** (2nd run; 1st run saw `test_block_polling.py::TestBlockFailure::test_failure_keeps_last_good_as_stale` fail, green on immediate full re-run and in isolation → recorded as an order/timing flake in HANDOFF §4), flake8 src 0
+- **Backlog surfaced (not started):** push the 8 local commits (awaiting approval), stale README testing section (references deleted `test_login_visual.py`), `config_page.py` size (88 KB), light-theme coverage at other window sizes, real-hardware validation (mock PLC only so far)
+- **Note:** no source changes this session — docs only, uncommitted
+
 ---
 
 ## Feature Checklist
